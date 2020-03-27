@@ -1,0 +1,96 @@
+<?xml version="1.0"?>
+<!--
+ Copyright (C) 2017 Love Park Robotics, LLC
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distribted on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+<launch>
+  <arg name="camera" default="camera"/>
+  <arg name="serial_number" default="-"/>
+  <arg name="on_at_startup" default="true"/>
+  <arg name="use_case" default="-"/>
+  <arg name="access_code" default="-"/>
+
+  <node pkg="nodelet"
+        type="nodelet"
+        name="$(arg camera)_standalone_nodelet"
+        args="manager"
+        output="screen"/>
+
+  <node pkg="nodelet"
+        type="nodelet"
+        name="$(arg camera)"
+        args="load royale_ros/camera_nodelet $(arg camera)_standalone_nodelet"
+        output="screen">
+
+    <!-- You can add topic remappings here, e.g.: -->
+    <!-- <remap from="/$(arg camera)/stream/1/cloud" to="/$(arg camera)/cloud"/> -->
+
+    <rosparam subst_value="true">
+      #
+      # Access code for unlocking features beyond Royale Level 1 access
+      # Please contact pmdtec for a valid code.
+      #
+      access_code: "$(arg access_code)"
+
+      #
+      # This is the specific camera to connect to
+      # or the special string "-" to connect to the
+      # first camera found on the bus
+      #
+      serial_number: "$(arg serial_number)"
+
+      #
+      # If a connection to the desired camera cannot be made,
+      # or is lost, this is how often to poll the bus to see
+      # if it was plugged back in
+      #
+      poll_bus_secs: 1.0
+
+      #
+      # Time in seconds used to detect a disconnected camera. For responsive
+      # behavior, you should set: timeout_secs >= poll_bus_secs
+      #
+      timeout_secs: 1.0
+
+      #
+      # tf frame names
+      #
+      optical_frame: $(arg camera)_optical_link
+      sensor_frame:  $(arg camera)_link
+
+      #
+      # The camera node provides for a turning on/off the camera via software.
+      # This allows for turning off the active illumination unit in the
+      # event the royale camera is deployed in a long-running environment
+      # like an industrial setting. This parameter sets whether or not
+      # the camera should be turned "on" at node startup time.
+      #
+      on_at_startup: $(arg on_at_startup)
+
+      #
+      # Specifies the use case to set on the camera at startup time.
+      # If the special use case of "-" (the default), no use case
+      # is set. You can always set the use case at runtime using the
+      # Config service.
+      #
+      initial_use_case: "$(arg use_case)"
+    </rosparam>
+  </node>
+
+  <!-- coord frame transform from Royale optical frame to ROS sensor frame -->
+  <node pkg="tf2_ros"
+        type="static_transform_publisher"
+        name="$(arg camera)_tf"
+        args="0 0 0 -1.5707963267948966 0 -1.5707963267948966 $(arg camera)_link $(arg camera)_optical_link"/>
+</launch>

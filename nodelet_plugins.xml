@@ -1,0 +1,9 @@
+<library path="lib/libfog_detection">
+    <class name="fog/fog_detection_nodelet"
+         type="fog::FogDetectionNodelet"
+         base_class_type="nodelet::Nodelet">
+    <description>
+      Nodelet to take in depth sensor data and compute Wide Field Integration coefficients.
+    </description>
+  </class>
+</library>
