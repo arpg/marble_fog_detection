@@ -2,7 +2,8 @@
     <!-- <group ns="A01"> -->
         <node pkg="nodelet" type="nodelet" name="standalone_nodelet" args="manager" output="screen" />
         <node pkg="nodelet" type="nodelet" name="fog_detection" args="load fog/fog_detection_nodelet standalone_nodelet" output="screen">
-            <remap from="in_image_raw"      to="/img_node/range_image" />
+            <remap from="in_range_img"      to="/img_node/range_image" />
+            <remap from="in_intensity_img"      to="/img_node/intensity_image" />
             <rosparam>
                 k_search:                 0.00
                 radius_search:            0.00
@@ -26,5 +27,56 @@
                 spatial_locator: 0
             </rosparam>
         </node>
+
+        <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
+        <node pkg="nodelet" type="nodelet" name="voxel_grid_x" args="load pcl/VoxelGrid standalone_nodelet" respawn="true" >
+            <remap from="~input" to="/os1_cloud_node/points"/>
+            <remap from="~voxel_grid/output" to="voxel_grid_x/output"/>
+            <rosparam>
+                filter_field_name: x <!-- Depth -->
+                filter_limit_min: -10.0
+                filter_limit_max:  10.0
+                filter_limit_negative: False
+                leaf_size: 0.1
+            </rosparam>
+        </node>
+
+        <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
+        <node pkg="nodelet" type="nodelet" name="voxel_grid_y" args="load pcl/VoxelGrid standalone_nodelet" respawn="true" >
+            <remap from="~input" to="voxel_grid_x/output"/>
+            <remap from="~voxel_grid/output" to="voxel_grid_y/output"/>
+            <rosparam>
+                filter_field_name: y <!-- Depth -->
+                filter_limit_min: -10.0
+                filter_limit_max:  10.0
+                filter_limit_negative: False
+                leaf_size: 0.1
+            </rosparam>
+        </node>
+
+
+        <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
+        <node pkg="nodelet" type="nodelet" name="voxel_grid_z" args="load pcl/VoxelGrid standalone_nodelet" respawn="true" >
+            <remap from="~input" to="voxel_grid_y/output"/>
+            <remap from="~voxel_grid/output" to="voxel_grid_z/output"/>
+            <rosparam>
+                filter_field_name: y <!-- Depth -->
+                filter_limit_min: -10.0
+                filter_limit_max:  10.0
+                filter_limit_negative: False
+                leaf_size: 0.1
+            </rosparam>
+        </node>
+
+        <!-- Run a StatisticalOutlierRemoval filter to clean NaNs and downsample the data -->
+        <node pkg="nodelet" type="nodelet" name="sor" args="load pcl/StatisticalOutlierRemoval standalone_nodelet"  respawn="true">
+            <remap from="~input" to="/voxel_grid_z/output"/>
+            <rosparam>
+                mean_k: 50
+                stddev:  2.0
+                negative:  True
+            </rosparam>
+        </node>
+
     <!-- </group> -->
 </launch>

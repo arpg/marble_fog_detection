@@ -30,16 +30,16 @@ namespace fog
         boost::lock_guard<boost::mutex> lock(connect_mutex_);
         image_transport::TransportHints hints("raw", ros::TransportHints(), getPrivateNodeHandle());
 
-        // Subscriber RealSense depth image
-        // sub_low_depth_image_ = it_in_->subscribeCamera("in_image_raw", queue_size_, &FogDetectionNodelet::low_depth_image_cb, this);
-
-        sub_low_depth_image_ = nh.subscribe("in_image_raw", 1, &FogDetectionNodelet::low_depth_image_cb, this);
+        // Subscriber Ouster images
+        sub_range_img_ = nh.subscribe("in_range_img", 1, &FogDetectionNodelet::range_image_cb, this);
+        sub_intensity_img_ = nh.subscribe("in_intensity_img", 1, &FogDetectionNodelet::intensity_image_cb, this);
 
         sub_low_depth_pcl_ = nh.subscribe("down/point_cloud", 1, &FogDetectionNodelet::low_point_cloud_cb, this);
 
         // Publish Point Cloud
-        pub_low_pcl_    = private_nh.advertise<PointCloud>("output", 10);
-        pub_low_image_out_    = private_nh.advertise<sensor_msgs::Image>("out_image_raw", 10);
+        pub_low_pcl_            = private_nh.advertise<PointCloud>("output", 10);
+        pub_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
+        pub_intensity_img_      = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
 
         // Create static tf broadcaster (-30 pitch, Realsense pointed down)
         // rosrun tf static_transform_publisher 0.0 0.0 0.0 0.0 -0.00913852259 0.0 base_link royale_camera_optical_frame 1000
@@ -93,10 +93,21 @@ namespace fog
 
     };
 
-    void FogDetectionNodelet::low_depth_image_cb(const sensor_msgs::ImageConstPtr& image_msg)
+    void FogDetectionNodelet::range_image_cb(const sensor_msgs::ImageConstPtr& image_msg)
     {
-        depth_image_to_twist(image_msg,
-                             pub_low_pcl_,
+        analyze_range_images(image_msg,
+                             pub_range_img_,
+                             low_camera_pixel_x_offset,
+                             low_camera_pixel_y_offset,
+                             low_camera_pixel_width,
+                             low_camera_pixel_height
+                             );
+    };
+
+    void FogDetectionNodelet::intensity_image_cb(const sensor_msgs::ImageConstPtr& image_msg)
+    {
+        analyze_intensity_images(image_msg,
+                             pub_intensity_img_,
                              low_camera_pixel_x_offset,
                              low_camera_pixel_y_offset,
                              low_camera_pixel_width,
@@ -111,14 +122,94 @@ namespace fog
                              );
     };
 
-    void FogDetectionNodelet::depth_image_to_twist(const sensor_msgs::ImageConstPtr& image_msg,
-                                                   const ros::Publisher pub_pcl_,
+    void FogDetectionNodelet::analyze_range_images(const sensor_msgs::ImageConstPtr& in_msg,
+                                                   const ros::Publisher pub_img_,
                                                    int x_offset,
                                                    int y_offset,
                                                    int width,
                                                    int height)
     {
-        pub_low_image_out_.publish(image_msg);
+
+        // Get cropping parameters
+        int max_width = in_msg->width - x_offset;
+        int max_height = in_msg->height - y_offset;
+        if (width == 0 || width > max_width)
+            width = max_width;
+        if (height == 0 || height > max_height)
+            height = max_height;
+
+        // Convert from ROS to OpenCV
+        CvImageConstPtr source = toCvShare(in_msg);
+
+        // Crop image
+        new_range_img = source->image(cv::Rect(x_offset, y_offset, width, height));
+
+        // https://github.com/IntelRealSense/librealsense/issues/3286
+        if (in_msg->encoding != "32FC1")
+        {
+
+            // The intensity image is of type CV_8UC1 (0-255, 0 is no return, higher is closer to sensor)
+            new_range_img.convertTo(new_range_img,CV_32FC1, 0.39215686274); // 100/255 = 0.39215686274
+        }
+
+        diff_range_img = new_range_img - old_range_img;
+
+        // std::cout << "diff_range_img = " << std::endl << " "  << diff_range_img << std::endl << std::endl;
+
+        cv_bridge::CvImage out_msg;
+        out_msg.header   = in_msg->header; // Same timestamp and tf frame as input image
+        out_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1; // Or whatever
+        out_msg.image    = diff_range_img; // Your cv::Mat
+
+        pub_img_.publish(out_msg.toImageMsg());
+
+        old_range_img = new_range_img;
+
+    };
+
+    void FogDetectionNodelet::analyze_intensity_images(const sensor_msgs::ImageConstPtr& in_msg,
+                                                       const ros::Publisher pub_img_,
+                                                       int x_offset,
+                                                       int y_offset,
+                                                       int width,
+                                                       int height)
+    {
+
+        // Get cropping parameters
+        int max_width = in_msg->width - x_offset;
+        int max_height = in_msg->height - y_offset;
+        if (width == 0 || width > max_width)
+            width = max_width;
+        if (height == 0 || height > max_height)
+            height = max_height;
+
+        // Convert from ROS to OpenCV
+        CvImageConstPtr source = toCvShare(in_msg);
+
+        // Crop image
+        new_intensity_img = source->image(cv::Rect(x_offset, y_offset, width, height));
+
+        // The intensity image is of type CV_8UC1 (0-255)
+        new_intensity_img.convertTo(new_intensity_img, CV_32FC1, 0.39215686274);
+
+        // https://github.com/IntelRealSense/librealsense/issues/3286
+        // if (in_msg->encoding != "32FC1")
+        // {
+        //     new_intensity_img.convertTo(new_intensity_img,CV_32FC1, 0.39215686274); // 100/255 = 0.39215686274
+        // }
+
+        diff_intensity_img = new_intensity_img - old_intensity_img;
+
+        std::cout << "diff_intensity_img" << std::endl << " "  << diff_intensity_img << std::endl << std::endl;
+
+        cv_bridge::CvImage out_msg;
+        out_msg.header   = in_msg->header; // Same timestamp and tf frame as input image
+        out_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1; // Or whatever
+        out_msg.image    = diff_intensity_img; // Your cv::Mat
+
+        pub_img_.publish(out_msg.toImageMsg());
+
+        old_intensity_img = new_intensity_img;
 
     };
 

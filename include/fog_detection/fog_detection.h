@@ -82,12 +82,14 @@ namespace fog
     public:
       // ROS communication
       boost::shared_ptr<image_transport::ImageTransport> it_in_;
-      ros::Subscriber sub_low_depth_image_;
+      ros::Subscriber sub_range_img_;
+      ros::Subscriber sub_intensity_img_;
       ros::Subscriber sub_low_depth_pcl_;
 
       ros::Publisher pub_output_;
       ros::Publisher pub_low_pcl_;
-      ros::Publisher pub_low_image_out_;
+      ros::Publisher pub_range_img_;
+      ros::Publisher pub_intensity_img_;
 
       ros::NodeHandle nh;
       ros::NodeHandle private_nh;
@@ -111,19 +113,27 @@ namespace fog
 
       void configCb(Config &config, uint32_t level);
 
-      void low_depth_image_cb(const sensor_msgs::ImageConstPtr& image_msg);
+      void range_image_cb(const sensor_msgs::ImageConstPtr& image_msg);
+      void intensity_image_cb(const sensor_msgs::ImageConstPtr& image_msg);
 
       void low_point_cloud_cb(const PointCloud::ConstPtr& msg);
 
-      void depth_image_to_twist(const sensor_msgs::ImageConstPtr& image_msg,
+      void analyze_range_images(const sensor_msgs::ImageConstPtr& in_msg,
                                 const ros::Publisher pub_pcl_,
                                 int x_offset,
                                 int y_offset,
                                 int width,
                                 int height);
 
+      void analyze_intensity_images(const sensor_msgs::ImageConstPtr& in_msg,
+                                    const ros::Publisher pub_pcl_,
+                                    int x_offset,
+                                    int y_offset,
+                                    int width,
+                                    int height);
+
       void point_cloud_to_twist(const PointCloud::ConstPtr& cloud_in,
-		      		const ros::Publisher pub_pcl_);
+              const ros::Publisher pub_pcl_);
 
     private:
 
@@ -168,6 +178,14 @@ namespace fog
       float ror_radius_;
       float ror_min_neighbors_;
       float height_variance_radius_;
+
+      cv::Mat new_range_img;
+      cv::Mat old_range_img;
+      cv::Mat diff_range_img;
+
+      cv::Mat new_intensity_img;
+      cv::Mat old_intensity_img;
+      cv::Mat diff_intensity_img;
 
       pcl::search::Search<pcl::PointXYZ>::Ptr tree_xyz;
       typedef pcl::PointCloud<pcl::PointXYZINormal> PointCloudOut;
