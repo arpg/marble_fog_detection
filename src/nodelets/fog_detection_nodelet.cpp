@@ -34,10 +34,12 @@ namespace fog
         sub_range_img_ = nh.subscribe("in_range_img", 1, &FogDetectionNodelet::range_image_cb, this);
         sub_intensity_img_ = nh.subscribe("in_intensity_img", 1, &FogDetectionNodelet::intensity_image_cb, this);
 
-        sub_low_depth_pcl_ = nh.subscribe("down/point_cloud", 1, &FogDetectionNodelet::low_point_cloud_cb, this);
+        // sub_low_depth_pcl_ = nh.subscribe("in_pcl", 1, &FogDetectionNodelet::point_cloud_cb, this);
+        sub_low_depth_pcl_ = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
 
         // Publish Point Cloud
-        pub_low_pcl_            = private_nh.advertise<PointCloud>("output", 10);
+        pub_conf_pcl_           = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
+        pub_conf_img_           = private_nh.advertise<sensor_msgs::Image>("out_conf_img", 10);
         pub_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
         pub_intensity_img_      = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
 
@@ -61,7 +63,6 @@ namespace fog
         std::cout << "base_link->camera roll: " << low_roll << std::endl;
         std::cout << "base_link->camera pitch: " << low_pitch << std::endl;
         std::cout << "base_link->camera yaw: " << low_yaw << std::endl;
-
     };
 
     void FogDetectionNodelet::configCb(Config &config, uint32_t level)
@@ -115,11 +116,59 @@ namespace fog
                              );
     };
 
-    void FogDetectionNodelet::low_point_cloud_cb(const PointCloud::ConstPtr& cloud_in)
+    void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& new_range_img)
     {
-        point_cloud_to_twist(cloud_in,
-                             pub_low_pcl_
-                             );
+        ouster_ros::OS1::CloudOS1 cloud_in{};
+
+        pcl::fromROSMsg(*new_range_img, cloud_in);
+
+        sensor_msgs::Image range_image;
+        sensor_msgs::Image noise_image;
+        sensor_msgs::Image intensity_image;
+
+        auto W = new_range_img->width;
+        auto H = new_range_img->height;
+
+        px_offset = ouster::OS1::get_px_offset(W);
+        // for 64 channels, should be [ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
+        //                              0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
+
+        noise_image.width = W;
+        noise_image.height = H;
+        noise_image.step = W;
+        noise_image.encoding = "mono8";
+        noise_image.data.resize(W * H);
+
+        intensity_image.width = W;
+        intensity_image.height = H;
+        intensity_image.step = W;
+        intensity_image.encoding = "mono8";
+        intensity_image.data.resize(W * H);
+
+        cv::Mat M(H, W, CV_32FC1, 0.0);
+
+        for (int u = 0; u < H; u++) {
+            for (int v = 0; v < W; v++) {
+                const size_t vv = (v + px_offset[u]) % W;
+                const size_t index = vv * H + u;
+                const auto& pt = cloud_in[index];
+                M.at<float>(u,v) = pt.range;
+                noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
+                intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
+            }
+        }
+
+        cv_bridge::CvImage out_msg;
+        out_msg.encoding        = sensor_msgs::image_encodings::TYPE_32FC1;
+        out_msg.image           = M; // Your cv::Mat
+        out_msg.header.stamp    = ros::Time::now();
+        out_msg.header.frame_id = new_range_img->header.frame_id;        
+        pub_conf_img_.publish(out_msg.toImageMsg());
+
+        // diff_range_img = abs(new_range_img - old_range_img);
+        // diff_conf_img = diff_range_img + old_conf_img;
+        // old_conf_img = new_conf_img;
+
     };
 
     void FogDetectionNodelet::analyze_range_images(const sensor_msgs::ImageConstPtr& in_msg,
@@ -144,15 +193,10 @@ namespace fog
         // Crop image
         new_range_img = source->image(cv::Rect(x_offset, y_offset, width, height));
 
-        // https://github.com/IntelRealSense/librealsense/issues/3286
-        if (in_msg->encoding != "32FC1")
-        {
+        // The range image is of type CV_8UC1/mono8 (0-255, 0 is no return, higher is closer to sensor)
+        new_range_img.convertTo(new_range_img,CV_32FC1, 0.39215686274); // 100/255 = 0.39215686274
 
-            // The intensity image is of type CV_8UC1 (0-255, 0 is no return, higher is closer to sensor)
-            new_range_img.convertTo(new_range_img,CV_32FC1, 0.39215686274); // 100/255 = 0.39215686274
-        }
-
-        diff_range_img = new_range_img - old_range_img;
+        diff_range_img = abs(new_range_img - old_range_img);
 
         // std::cout << "diff_range_img = " << std::endl << " "  << diff_range_img << std::endl << std::endl;
 
@@ -189,18 +233,12 @@ namespace fog
         // Crop image
         new_intensity_img = source->image(cv::Rect(x_offset, y_offset, width, height));
 
-        // The intensity image is of type CV_8UC1 (0-255)
+        // The intensity image is of type CV_8UC1/mono8 (0-255)
         new_intensity_img.convertTo(new_intensity_img, CV_32FC1, 0.39215686274);
 
-        // https://github.com/IntelRealSense/librealsense/issues/3286
-        // if (in_msg->encoding != "32FC1")
-        // {
-        //     new_intensity_img.convertTo(new_intensity_img,CV_32FC1, 0.39215686274); // 100/255 = 0.39215686274
-        // }
+        diff_intensity_img = abs(new_intensity_img - old_intensity_img);
 
-        diff_intensity_img = new_intensity_img - old_intensity_img;
-
-        std::cout << "diff_intensity_img" << std::endl << " "  << diff_intensity_img << std::endl << std::endl;
+        // std::cout << "diff_intensity_img" << std::endl << " "  << diff_intensity_img << std::endl << std::endl;
 
         cv_bridge::CvImage out_msg;
         out_msg.header   = in_msg->header; // Same timestamp and tf frame as input image
@@ -213,118 +251,6 @@ namespace fog
 
     };
 
-    void FogDetectionNodelet::point_cloud_to_twist(const PointCloud::ConstPtr& cloud_in,
-                                                       const ros::Publisher pub_pcl_)
-    {
-        //////////////////////////////////////
-        // FILTER OUT NANS FROM POINT CLOUD //
-        //////////////////////////////////////
-
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in_filtered (new pcl::PointCloud<pcl::PointXYZ>);
-        boost::shared_ptr<std::vector<int>> indices_nan(new std::vector<int>);
-        pcl::removeNaNFromPointCloud(*cloud_in, *indices_nan);
-        pcl::ExtractIndices<pcl::PointXYZ> extract;
-        extract.setInputCloud(cloud_in);
-        extract.setIndices(indices_nan);
-        extract.setNegative(false);
-        extract.filter(*cloud_in_filtered);
-
-        /////////////////////////////////
-        // TRANSFORM INPUT POINT CLOUD //
-        /////////////////////////////////
-
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in_transformed (new pcl::PointCloud<pcl::PointXYZ>);
-        tf::Transform transform_pcl;
-        tf::Quaternion q;
-
-        // Note roll and pitch are intentionally backwards due to the image frame to boldy frame transform_pcl. The IMU transform_pcl converts from body to world frame.
-        // transform_pcl.setRotation( tf::createQuaternionFromRPY(transform_pcl_roll_, transform_pcl_pitch_, transform_pcl_yaw_) );
-        transform_pcl.setRotation(tf::createQuaternionFromRPY(0.0, 0.0, 0.0));
-        pcl_ros::transformPointCloud(*cloud_in_filtered, *cloud_in_transformed, transform_pcl);
-
-        ///////////////////////
-        // CALCULATE NORMALS //
-        ///////////////////////
-
-        if (cloud_in_transformed->isOrganized ())
-        {
-            tree_xyz.reset(new pcl::search::OrganizedNeighbor<pcl::PointXYZ> ());
-        }
-        else
-        {
-            // Use KDTree for non-organized data
-            tree_xyz.reset(new pcl::search::KdTree<pcl::PointXYZ> (false));
-        }
-
-        // Set input pointcloud for search tree
-        tree_xyz->setInputCloud(cloud_in_transformed);
-
-        pcl::NormalEstimation<pcl::PointXYZ, pcl::PointXYZINormal> ne; // NormalEstimationOMP uses more CPU on NUC (do not use OMP!)
-        ne.setInputCloud(cloud_in_transformed);
-        ne.setSearchMethod(tree_xyz);
-
-        // Set viewpoint, very important so normals are all pointed in the same direction
-        ne.setViewPoint(std::numeric_limits<float>::max (), std::numeric_limits<float>::max (), std::numeric_limits<float>::max ());
-
-        pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloud_ne (new pcl::PointCloud<pcl::PointXYZINormal>);
-
-        ne.setRadiusSearch(normal_radius_);
-        ne.compute(*cloud_ne);
-
-        // Assign original xyz data to normal estimate cloud (this is necessary because by default the xyz fields are empty)
-        for (int i = 0; i < cloud_in_transformed->points.size(); i++)
-        {
-            cloud_ne->points[i].x = cloud_in_transformed->points[i].x;
-            cloud_ne->points[i].y = cloud_in_transformed->points[i].y;
-            cloud_ne->points[i].z = cloud_in_transformed->points[i].z;
-        }
-
-        // Create conditional object
-        pcl::ConditionOr<pcl::PointXYZINormal>::Ptr range_cond ( new pcl::ConditionOr<pcl::PointXYZINormal> () );
-
-        // Add conditional statements
-        // range_cond->addComparison (pcl::FieldComparison<pcl::PointXYZINormal>::ConstPtr ( new pcl::FieldComparison<pcl::PointXYZINormal> ("normal_x",  pcl::ComparisonOps::LT, normal_x_LT_threshold_)) );
-        // range_cond->addComparison (pcl::FieldComparison<pcl::PointXYZINormal>::ConstPtr ( new pcl::FieldComparison<pcl::PointXYZINormal> ("normal_x",  pcl::ComparisonOps::GT, normal_x_GT_threshold_)) );
-        // range_cond->addComparison (pcl::FieldComparison<pcl::PointXYZINormal>::ConstPtr ( new pcl::FieldComparison<pcl::PointXYZINormal> ("normal_y",  pcl::ComparisonOps::LT, normal_y_LT_threshold_)) );
-        // range_cond->addComparison (pcl::FieldComparison<pcl::PointXYZINormal>::ConstPtr ( new pcl::FieldComparison<pcl::PointXYZINormal> ("normal_y",  pcl::ComparisonOps::GT, normal_y_GT_threshold_)) );
-        range_cond->addComparison (pcl::FieldComparison<pcl::PointXYZINormal>::ConstPtr ( new pcl::FieldComparison<pcl::PointXYZINormal> ("normal_z",  pcl::ComparisonOps::LT, normal_z_LT_threshold_)) );
-        range_cond->addComparison (pcl::FieldComparison<pcl::PointXYZINormal>::ConstPtr ( new pcl::FieldComparison<pcl::PointXYZINormal> ("normal_z",  pcl::ComparisonOps::GT, normal_z_GT_threshold_)) );
-
-        // Build the filter
-        pcl::ConditionalRemoval<pcl::PointXYZINormal> condrem;
-        condrem.setCondition (range_cond);
-        condrem.setInputCloud (cloud_ne);
-
-        // Apply filter
-        pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloud_condrem (new pcl::PointCloud<pcl::PointXYZINormal>);
-        condrem.filter (*cloud_condrem);
-
-        //////////////////
-        // REDUCE NOISE //
-        //////////////////
-
-        // Build the filter
-        pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloud_ror (new pcl::PointCloud<pcl::PointXYZINormal>);
-        pcl::RadiusOutlierRemoval<pcl::PointXYZINormal> ror;
-        ror.setInputCloud(cloud_condrem);
-        ror.setRadiusSearch(ror_radius_);
-        ror.setMinNeighborsInRadius (ror_min_neighbors_);
-        ror.filter (*cloud_ror);
-
-        //////////////////////////////////
-        // PUBLISH FILTERED POINT CLOUD //
-        //////////////////////////////////
-
-        seq++;
-        cloud_ror->header.seq = seq;
-        cloud_ror->header.frame_id = cloud_in->header.frame_id;
-        pcl_conversions::toPCL(ros::Time::now(), cloud_ror->header.stamp);
-        pub_pcl_.publish (cloud_ror);
-
-        // Clear memory
-        cloud_ror->clear();
-
-    };
 }
 
 // Register nodelet

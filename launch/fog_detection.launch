@@ -1,32 +1,5 @@
 <launch>
     <!-- <group ns="A01"> -->
-        <node pkg="nodelet" type="nodelet" name="standalone_nodelet" args="manager" output="screen" />
-        <node pkg="nodelet" type="nodelet" name="fog_detection" args="load fog/fog_detection_nodelet standalone_nodelet" output="screen">
-            <remap from="in_range_img"      to="/img_node/range_image" />
-            <remap from="in_intensity_img"      to="/img_node/intensity_image" />
-            <rosparam>
-                k_search:                 0.00
-                radius_search:            0.00
-                transform_pcl_roll:       -2.19439510239 <!-- -2.09439510239 = -pi/2 + -pi/6 camera tilt -->
-                transform_pcl_pitch:      0.00
-                transform_pcl_yaw:       -1.57079632679
-                don_radius_1:             0.03
-                don_radius_2:             0.30
-                don_LT_threshold:         0.00
-                don_GT_threshold:         0.10
-                normal_radius:            0.15 <!--  0.05 -->  <!--  0.15 for Husky -->  <!--  0.10 for Track Bot -->
-                normal_x_LT_threshold:    0.866 <!-- -0.30 -->
-                normal_x_GT_threshold:    1.00 <!--  0.30 -->
-                normal_y_LT_threshold:   -0.50 <!-- -0.30 -->
-                normal_y_GT_threshold:    0.50 <!--  0.30 -->
-                normal_z_LT_threshold:   -0.50 <!--  0.956 -->
-                normal_z_GT_threshold:    0.50
-                ror_radius:               0.10
-                ror_min_neighbors:           7
-                # Set the spatial locator. Possible values are: 0 (ANN), 1 (FLANN), 2 (organized)
-                spatial_locator: 0
-            </rosparam>
-        </node>
 
         <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
         <node pkg="nodelet" type="nodelet" name="voxel_grid_x" args="load pcl/VoxelGrid standalone_nodelet" respawn="true" >
@@ -75,6 +48,35 @@
                 mean_k: 50
                 stddev:  2.0
                 negative:  True
+            </rosparam>
+        </node>
+
+        <node pkg="nodelet" type="nodelet" name="standalone_nodelet" args="manager" output="screen" />
+        <node pkg="nodelet" type="nodelet" name="fog_detection" args="load fog/fog_detection_nodelet standalone_nodelet" output="screen">
+            <remap from="in_range_img"          to="/img_node/range_image" />
+            <remap from="in_intensity_img"      to="/img_node/intensity_image" />
+            <remap from="in_pcl"                to="/os1_cloud_node/points" />
+            <rosparam>
+                k_search:                 0.00
+                radius_search:            0.00
+                transform_pcl_roll:       -2.19439510239 <!-- -2.09439510239 = -pi/2 + -pi/6 camera tilt -->
+                transform_pcl_pitch:      0.00
+                transform_pcl_yaw:       -1.57079632679
+                don_radius_1:             0.03
+                don_radius_2:             0.30
+                don_LT_threshold:         0.00
+                don_GT_threshold:         0.10
+                normal_radius:            0.15 <!--  0.05 -->  <!--  0.15 for Husky -->  <!--  0.10 for Track Bot -->
+                normal_x_LT_threshold:    0.866 <!-- -0.30 -->
+                normal_x_GT_threshold:    1.00 <!--  0.30 -->
+                normal_y_LT_threshold:   -0.50 <!-- -0.30 -->
+                normal_y_GT_threshold:    0.50 <!--  0.30 -->
+                normal_z_LT_threshold:   -0.50 <!--  0.956 -->
+                normal_z_GT_threshold:    0.50
+                ror_radius:               0.10
+                ror_min_neighbors:           7
+                # Set the spatial locator. Possible values are: 0 (ANN), 1 (FLANN), 2 (organized)
+                spatial_locator: 0
             </rosparam>
         </node>
 

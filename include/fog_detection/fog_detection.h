@@ -65,7 +65,11 @@
 #include <tf/transform_datatypes.h>
 
 
-
+#include <ouster/os1.h>
+#include <ouster/os1_packet.h>
+#include <ouster/os1_util.h>
+#include <ouster_ros/OS1ConfigSrv.h>
+#include <ouster_ros/os1_ros.h>
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
@@ -73,13 +77,18 @@ typedef PointCloud::Ptr ptr_cloud;
 
 using namespace cv;
 using namespace cv_bridge; // CvImage, toCvShare
-
+namespace OS1 = ouster::OS1;
 
 namespace fog
 {
   class FogDetectionNodelet : public nodelet::Nodelet
   {
     public:
+    
+      std::vector<int> px_offset;
+      int H;
+      int W;
+
       // ROS communication
       boost::shared_ptr<image_transport::ImageTransport> it_in_;
       ros::Subscriber sub_range_img_;
@@ -87,7 +96,8 @@ namespace fog
       ros::Subscriber sub_low_depth_pcl_;
 
       ros::Publisher pub_output_;
-      ros::Publisher pub_low_pcl_;
+      ros::Publisher pub_conf_pcl_;
+      ros::Publisher pub_conf_img_;
       ros::Publisher pub_range_img_;
       ros::Publisher pub_intensity_img_;
 
@@ -115,25 +125,21 @@ namespace fog
 
       void range_image_cb(const sensor_msgs::ImageConstPtr& image_msg);
       void intensity_image_cb(const sensor_msgs::ImageConstPtr& image_msg);
-
-      void low_point_cloud_cb(const PointCloud::ConstPtr& msg);
+      void point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& msg);
 
       void analyze_range_images(const sensor_msgs::ImageConstPtr& in_msg,
-                                const ros::Publisher pub_pcl_,
+                                const ros::Publisher pub_img_,
                                 int x_offset,
                                 int y_offset,
                                 int width,
                                 int height);
 
       void analyze_intensity_images(const sensor_msgs::ImageConstPtr& in_msg,
-                                    const ros::Publisher pub_pcl_,
+                                    const ros::Publisher pub_img_,
                                     int x_offset,
                                     int y_offset,
                                     int width,
                                     int height);
-
-      void point_cloud_to_twist(const PointCloud::ConstPtr& cloud_in,
-              const ros::Publisher pub_pcl_);
 
     private:
 

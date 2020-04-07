@@ -14,7 +14,8 @@ find_package(catkin REQUIRED
         sensor_msgs
         message_generation
         pcl_ros
-        pcl_conversions)
+        pcl_conversions
+        ouster_ros)
 find_package(OpenCV REQUIRED)
 find_package(Boost REQUIRED COMPONENTS thread)
 
