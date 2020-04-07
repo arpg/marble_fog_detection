@@ -96,13 +96,13 @@ namespace fog
 
     void FogDetectionNodelet::range_image_cb(const sensor_msgs::ImageConstPtr& image_msg)
     {
-        analyze_range_images(image_msg,
-                             pub_range_img_,
-                             low_camera_pixel_x_offset,
-                             low_camera_pixel_y_offset,
-                             low_camera_pixel_width,
-                             low_camera_pixel_height
-                             );
+        // analyze_range_images(image_msg,
+        //                      pub_range_img_,
+        //                      low_camera_pixel_x_offset,
+        //                      low_camera_pixel_y_offset,
+        //                      low_camera_pixel_width,
+        //                      low_camera_pixel_height
+        //                      );
     };
 
     void FogDetectionNodelet::intensity_image_cb(const sensor_msgs::ImageConstPtr& image_msg)
@@ -116,20 +116,20 @@ namespace fog
                              );
     };
 
-    void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& new_range_img)
+    void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& in_pcl)
     {
         ouster_ros::OS1::CloudOS1 cloud_in{};
 
-        pcl::fromROSMsg(*new_range_img, cloud_in);
+        pcl::fromROSMsg(*in_pcl, cloud_in);
 
         sensor_msgs::Image range_image;
         sensor_msgs::Image noise_image;
         sensor_msgs::Image intensity_image;
 
-        auto W = new_range_img->width;
-        auto H = new_range_img->height;
+        int W = in_pcl->width;
+        int H = in_pcl->height;
 
-        px_offset = ouster::OS1::get_px_offset(W);
+        std::vector<int>  px_offset = ouster::OS1::get_px_offset(W);
         // for 64 channels, should be [ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
         //                              0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
 
@@ -145,30 +145,58 @@ namespace fog
         intensity_image.encoding = "mono8";
         intensity_image.data.resize(W * H);
 
-        cv::Mat M(H, W, CV_32FC1, 0.0);
+        cv::Mat new_range_img(H, W, CV_32FC1, 0.0);
+        cv::Mat new_conf_img(H, W, CV_32FC1, 0.0);
 
         for (int u = 0; u < H; u++) {
             for (int v = 0; v < W; v++) {
                 const size_t vv = (v + px_offset[u]) % W;
                 const size_t index = vv * H + u;
                 const auto& pt = cloud_in[index];
-                M.at<float>(u,v) = pt.range;
+                new_range_img.at<float>(u,v) = pt.range;
                 noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
                 intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
             }
         }
 
+        // cv_bridge::CvImage out_msg;
+        // out_msg.encoding        = sensor_msgs::image_encodings::TYPE_32FC1;
+        // out_msg.image           = new_range_img; // Your cv::Mat
+        // out_msg.header.stamp    = ros::Time::now();
+        // out_msg.header.frame_id = in_pcl->header.frame_id;
+        // pub_conf_img_.publish(out_msg.toImageMsg());
+
+        cv::Mat diff_range_img(H, W, CV_32FC1, 0.0);
+
+        if(last_range_img.rows == 0 && last_range_img.cols == 0)
+        {
+            std::cout << "1: " << last_range_img.rows << std::endl;
+        }
+        else
+        {
+            std::cout << "2: " << last_range_img.cols << std::endl;
+            // diff_range_img *= 2.0;
+            diff_range_img = abs(new_range_img - last_range_img);
+            cv::Scalar avg = cv::mean(diff_range_img);
+            std::cout << "avg" << avg << std::endl;
+
+            new_conf_img = 0.90 * last_conf_img;
+            new_conf_img += diff_range_img;
+
+        }
+        
+        std::cout << "rows: " << last_range_img.rows << std::endl;
+        std::cout << "cols: " << last_range_img.cols << std::endl;
+
         cv_bridge::CvImage out_msg;
         out_msg.encoding        = sensor_msgs::image_encodings::TYPE_32FC1;
-        out_msg.image           = M; // Your cv::Mat
+        out_msg.image           = new_conf_img;
         out_msg.header.stamp    = ros::Time::now();
-        out_msg.header.frame_id = new_range_img->header.frame_id;        
+        out_msg.header.frame_id = in_pcl->header.frame_id;        
         pub_conf_img_.publish(out_msg.toImageMsg());
 
-        // diff_range_img = abs(new_range_img - old_range_img);
-        // diff_conf_img = diff_range_img + old_conf_img;
-        // old_conf_img = new_conf_img;
-
+        last_conf_img = new_conf_img;
+        last_range_img = new_range_img;
     };
 
     void FogDetectionNodelet::analyze_range_images(const sensor_msgs::ImageConstPtr& in_msg,
@@ -191,12 +219,12 @@ namespace fog
         CvImageConstPtr source = toCvShare(in_msg);
 
         // Crop image
-        new_range_img = source->image(cv::Rect(x_offset, y_offset, width, height));
+        cv::Mat new_range_img = source->image(cv::Rect(x_offset, y_offset, width, height));
 
         // The range image is of type CV_8UC1/mono8 (0-255, 0 is no return, higher is closer to sensor)
         new_range_img.convertTo(new_range_img,CV_32FC1, 0.39215686274); // 100/255 = 0.39215686274
 
-        diff_range_img = abs(new_range_img - old_range_img);
+        cv::Mat diff_range_img = abs(new_range_img - last_range_img);
 
         // std::cout << "diff_range_img = " << std::endl << " "  << diff_range_img << std::endl << std::endl;
 
@@ -207,7 +235,7 @@ namespace fog
 
         pub_img_.publish(out_msg.toImageMsg());
 
-        old_range_img = new_range_img;
+        last_range_img = new_range_img;
 
     };
 
@@ -231,12 +259,12 @@ namespace fog
         CvImageConstPtr source = toCvShare(in_msg);
 
         // Crop image
-        new_intensity_img = source->image(cv::Rect(x_offset, y_offset, width, height));
+        cv::Mat new_intensity_img = source->image(cv::Rect(x_offset, y_offset, width, height));
 
         // The intensity image is of type CV_8UC1/mono8 (0-255)
         new_intensity_img.convertTo(new_intensity_img, CV_32FC1, 0.39215686274);
 
-        diff_intensity_img = abs(new_intensity_img - old_intensity_img);
+        cv::Mat diff_intensity_img = abs(new_intensity_img - last_intensity_img);
 
         // std::cout << "diff_intensity_img" << std::endl << " "  << diff_intensity_img << std::endl << std::endl;
 
@@ -247,7 +275,7 @@ namespace fog
 
         pub_img_.publish(out_msg.toImageMsg());
 
-        old_intensity_img = new_intensity_img;
+        last_intensity_img = new_intensity_img;
 
     };
 

@@ -85,10 +85,6 @@ namespace fog
   {
     public:
     
-      std::vector<int> px_offset;
-      int H;
-      int W;
-
       // ROS communication
       boost::shared_ptr<image_transport::ImageTransport> it_in_;
       ros::Subscriber sub_range_img_;
@@ -185,13 +181,9 @@ namespace fog
       float ror_min_neighbors_;
       float height_variance_radius_;
 
-      cv::Mat new_range_img;
-      cv::Mat old_range_img;
-      cv::Mat diff_range_img;
-
-      cv::Mat new_intensity_img;
-      cv::Mat old_intensity_img;
-      cv::Mat diff_intensity_img;
+      cv::Mat last_range_img;
+      cv::Mat last_conf_img;
+      cv::Mat last_intensity_img;
 
       pcl::search::Search<pcl::PointXYZ>::Ptr tree_xyz;
       typedef pcl::PointCloud<pcl::PointXYZINormal> PointCloudOut;
