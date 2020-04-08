@@ -40,6 +40,8 @@ namespace fog
         // Publish Point Cloud
         pub_conf_pcl_           = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
         pub_conf_img_           = private_nh.advertise<sensor_msgs::Image>("out_conf_img", 10);
+        pub_noreturn_img_       = private_nh.advertise<sensor_msgs::Image>("out_noreturn_img", 10);
+        pub_prob_noreturn_img_  = private_nh.advertise<sensor_msgs::Image>("prob_noreturn_img", 10);
         pub_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
         pub_intensity_img_      = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
 
@@ -116,87 +118,115 @@ namespace fog
                              );
     };
 
-    void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& in_pcl)
+    void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
     {
         ouster_ros::OS1::CloudOS1 cloud_in{};
 
-        pcl::fromROSMsg(*in_pcl, cloud_in);
+        pcl::fromROSMsg(*cloud_in_ros, cloud_in);
 
         sensor_msgs::Image range_image;
         sensor_msgs::Image noise_image;
         sensor_msgs::Image intensity_image;
 
-        int W = in_pcl->width;
-        int H = in_pcl->height;
-
+        // Get PCL metadata
+        int W = cloud_in_ros->width;
+        int H = cloud_in_ros->height;
         std::vector<int>  px_offset = ouster::OS1::get_px_offset(W);
         // for 64 channels, should be [ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
         //                              0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
 
+        // Setup Noise Image
         noise_image.width = W;
         noise_image.height = H;
         noise_image.step = W;
         noise_image.encoding = "mono8";
         noise_image.data.resize(W * H);
 
+        // Set up Intensity Image
         intensity_image.width = W;
         intensity_image.height = H;
         intensity_image.step = W;
         intensity_image.encoding = "mono8";
         intensity_image.data.resize(W * H);
 
+        cv::Mat zero_range_img(H, W, CV_32FC1, 0.1);
+        cv::Mat max_range_img(H, W, CV_32FC1, 20.0);
+        cv::Mat nonzero_range_img(H, W, CV_32FC1, 0.1);
         cv::Mat new_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat new_conf_img(H, W, CV_32FC1, 0.0);
+        cv::Mat new_noreturn_img(H, W, CV_32FC1, 0.0);
+        cv::Mat new_prob_noreturn_img(H, W, CV_32FC1, 0.0);
 
         for (int u = 0; u < H; u++) {
             for (int v = 0; v < W; v++) {
                 const size_t vv = (v + px_offset[u]) % W;
                 const size_t index = vv * H + u;
                 const auto& pt = cloud_in[index];
-                new_range_img.at<float>(u,v) = pt.range;
+                new_range_img.at<float>(u,v) = pt.range * 5e-3;
                 noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
                 intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
             }
         }
 
-        // cv_bridge::CvImage out_msg;
-        // out_msg.encoding        = sensor_msgs::image_encodings::TYPE_32FC1;
-        // out_msg.image           = new_range_img; // Your cv::Mat
-        // out_msg.header.stamp    = ros::Time::now();
-        // out_msg.header.frame_id = in_pcl->header.frame_id;
-        // pub_conf_img_.publish(out_msg.toImageMsg());
-
         cv::Mat diff_range_img(H, W, CV_32FC1, 0.0);
 
         if(last_range_img.rows == 0 && last_range_img.cols == 0)
         {
-            std::cout << "1: " << last_range_img.rows << std::endl;
         }
         else
         {
-            std::cout << "2: " << last_range_img.cols << std::endl;
-            // diff_range_img *= 2.0;
+
+            // Difference of Range Images
             diff_range_img = abs(new_range_img - last_range_img);
+            diff_range_img.setTo(0.0, zero_range_img > last_range_img);
+            diff_range_img.setTo(0.0, zero_range_img > new_range_img);
+            diff_range_img.setTo(0.0, max_range_img < new_range_img);
+            diff_range_img.setTo(0.0, max_range_img < last_range_img);
+
             cv::Scalar avg = cv::mean(diff_range_img);
             std::cout << "avg" << avg << std::endl;
 
             new_conf_img = 0.90 * last_conf_img;
-            new_conf_img += diff_range_img;
+            new_conf_img = new_conf_img + diff_range_img;
+
+            // Compute binary no-return image (1 = no return, 0 = return)
+            float thresh = 0.0;
+            float maxval = 0.1;
+            cv::threshold(new_range_img, new_noreturn_img, thresh, maxval, THRESH_BINARY_INV);
+            new_prob_noreturn_img = 0.90 * last_prob_noreturn_img;
+            new_prob_noreturn_img = new_prob_noreturn_img + new_noreturn_img;
 
         }
         
-        std::cout << "rows: " << last_range_img.rows << std::endl;
-        std::cout << "cols: " << last_range_img.cols << std::endl;
+        // Publish Confidence Image
+        cv_bridge::CvImage conf_msg;
+        conf_msg.encoding        = sensor_msgs::image_encodings::TYPE_32FC1;
+        conf_msg.image           = new_conf_img;
+        conf_msg.header.stamp    = ros::Time::now();
+        conf_msg.header.frame_id = cloud_in_ros->header.frame_id;        
+        pub_conf_img_.publish(conf_msg.toImageMsg());
 
-        cv_bridge::CvImage out_msg;
-        out_msg.encoding        = sensor_msgs::image_encodings::TYPE_32FC1;
-        out_msg.image           = new_conf_img;
-        out_msg.header.stamp    = ros::Time::now();
-        out_msg.header.frame_id = in_pcl->header.frame_id;        
-        pub_conf_img_.publish(out_msg.toImageMsg());
+        // Publish No Return Image
+        cv_bridge::CvImage noreturn_msg;
+        noreturn_msg.encoding           = sensor_msgs::image_encodings::TYPE_32FC1;
+        noreturn_msg.image              = new_noreturn_img;
+        noreturn_msg.header.stamp       = ros::Time::now();
+        noreturn_msg.header.frame_id    = cloud_in_ros->header.frame_id;        
+        pub_noreturn_img_.publish(noreturn_msg.toImageMsg());
 
-        last_conf_img = new_conf_img;
-        last_range_img = new_range_img;
+        // Publish No Return Image
+        cv_bridge::CvImage prob_noreturn_msg;
+        prob_noreturn_msg.encoding          = sensor_msgs::image_encodings::TYPE_32FC1;
+        prob_noreturn_msg.image             = new_prob_noreturn_img;
+        prob_noreturn_msg.header.stamp      = ros::Time::now();
+        prob_noreturn_msg.header.frame_id   = cloud_in_ros->header.frame_id;        
+        pub_prob_noreturn_img_.publish(prob_noreturn_msg.toImageMsg());
+
+        last_range_img          = new_range_img;
+        last_conf_img           = new_conf_img;
+        last_noreturn_img       = new_noreturn_img;
+        last_prob_noreturn_img  = new_prob_noreturn_img;
+
     };
 
     void FogDetectionNodelet::analyze_range_images(const sensor_msgs::ImageConstPtr& in_msg,
@@ -228,12 +258,12 @@ namespace fog
 
         // std::cout << "diff_range_img = " << std::endl << " "  << diff_range_img << std::endl << std::endl;
 
-        cv_bridge::CvImage out_msg;
-        out_msg.header   = in_msg->header; // Same timestamp and tf frame as input image
-        out_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1; // Or whatever
-        out_msg.image    = diff_range_img; // Your cv::Mat
+        cv_bridge::CvImage conf_msg;
+        conf_msg.header   = in_msg->header; // Same timestamp and tf frame as input image
+        conf_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1; // Or whatever
+        conf_msg.image    = diff_range_img; // Your cv::Mat
 
-        pub_img_.publish(out_msg.toImageMsg());
+        pub_img_.publish(conf_msg.toImageMsg());
 
         last_range_img = new_range_img;
 
@@ -268,12 +298,12 @@ namespace fog
 
         // std::cout << "diff_intensity_img" << std::endl << " "  << diff_intensity_img << std::endl << std::endl;
 
-        cv_bridge::CvImage out_msg;
-        out_msg.header   = in_msg->header; // Same timestamp and tf frame as input image
-        out_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1; // Or whatever
-        out_msg.image    = diff_intensity_img; // Your cv::Mat
+        cv_bridge::CvImage conf_msg;
+        conf_msg.header   = in_msg->header; // Same timestamp and tf frame as input image
+        conf_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1; // Or whatever
+        conf_msg.image    = diff_intensity_img; // Your cv::Mat
 
-        pub_img_.publish(out_msg.toImageMsg());
+        pub_img_.publish(conf_msg.toImageMsg());
 
         last_intensity_img = new_intensity_img;
 

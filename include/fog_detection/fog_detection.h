@@ -94,6 +94,8 @@ namespace fog
       ros::Publisher pub_output_;
       ros::Publisher pub_conf_pcl_;
       ros::Publisher pub_conf_img_;
+      ros::Publisher pub_prob_noreturn_img_;
+      ros::Publisher pub_noreturn_img_;
       ros::Publisher pub_range_img_;
       ros::Publisher pub_intensity_img_;
 
@@ -181,9 +183,12 @@ namespace fog
       float ror_min_neighbors_;
       float height_variance_radius_;
 
+      cv::Mat last_intensity_img;
       cv::Mat last_range_img;
       cv::Mat last_conf_img;
-      cv::Mat last_intensity_img;
+      cv::Mat last_noreturn_img;
+      cv::Mat last_prob_noreturn_img;
+      
 
       pcl::search::Search<pcl::PointXYZ>::Ptr tree_xyz;
       typedef pcl::PointCloud<pcl::PointXYZINormal> PointCloudOut;
