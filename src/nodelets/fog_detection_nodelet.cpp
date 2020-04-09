@@ -176,6 +176,11 @@ namespace fog
         else
         {
 
+            // mask_update_range = new_range_img < 0.1;
+            // blah.setTo(blah, mask_update_range);
+
+            // new_range_img.setTo(0.0, zero_range_img < new_range_img);
+
             // Difference of Range Images
             diff_range_img = abs(new_range_img - last_range_img);
             diff_range_img.setTo(0.0, zero_range_img > last_range_img);
@@ -186,32 +191,31 @@ namespace fog
             cv::Scalar avg = cv::mean(diff_range_img);
             std::cout << "avg" << avg << std::endl;
 
-            new_conf_img = 0.90 * last_conf_img;
+            new_conf_img = 0.75 * last_conf_img;
             new_conf_img = new_conf_img + diff_range_img;
 
             // Compute binary no-return image (1 = no return, 0 = return)
             float thresh = 0.0;
             float maxval = 0.1;
             cv::threshold(new_range_img, new_noreturn_img, thresh, maxval, THRESH_BINARY_INV);
-            new_prob_noreturn_img = 0.90 * last_prob_noreturn_img;
+            new_prob_noreturn_img = 0.75 * last_prob_noreturn_img;
             new_prob_noreturn_img = new_prob_noreturn_img + new_noreturn_img;
-
         }
         
         // Publish Confidence Image
         cv_bridge::CvImage conf_msg;
-        conf_msg.encoding        = sensor_msgs::image_encodings::TYPE_32FC1;
-        conf_msg.image           = new_conf_img;
-        conf_msg.header.stamp    = ros::Time::now();
-        conf_msg.header.frame_id = cloud_in_ros->header.frame_id;        
+        conf_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+        conf_msg.image                      = new_conf_img;
+        conf_msg.header.stamp               = ros::Time::now();
+        conf_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
         pub_conf_img_.publish(conf_msg.toImageMsg());
 
         // Publish No Return Image
         cv_bridge::CvImage noreturn_msg;
-        noreturn_msg.encoding           = sensor_msgs::image_encodings::TYPE_32FC1;
-        noreturn_msg.image              = new_noreturn_img;
-        noreturn_msg.header.stamp       = ros::Time::now();
-        noreturn_msg.header.frame_id    = cloud_in_ros->header.frame_id;        
+        noreturn_msg.encoding               = sensor_msgs::image_encodings::TYPE_32FC1;
+        noreturn_msg.image                  = new_noreturn_img;
+        noreturn_msg.header.stamp           = ros::Time::now();
+        noreturn_msg.header.frame_id        = cloud_in_ros->header.frame_id;        
         pub_noreturn_img_.publish(noreturn_msg.toImageMsg());
 
         // Publish No Return Image
@@ -222,7 +226,20 @@ namespace fog
         prob_noreturn_msg.header.frame_id   = cloud_in_ros->header.frame_id;        
         pub_prob_noreturn_img_.publish(prob_noreturn_msg.toImageMsg());
 
-        last_range_img          = new_range_img;
+        last_range_img                      = new_range_img;
+
+
+        // last_range_img.setTo(last_range_img, zero_range_img > last_range_img);
+        // diff_range_img.setTo(0.0, zero_range_img > new_range_img);
+        // diff_range_img.setTo(0.0, max_range_img < new_range_img);
+        // diff_range_img.setTo(0.0, max_range_img < last_range_img);
+
+
+
+
+
+
+
         last_conf_img           = new_conf_img;
         last_noreturn_img       = new_noreturn_img;
         last_prob_noreturn_img  = new_prob_noreturn_img;
