@@ -157,6 +157,9 @@ namespace fog
         cv::Mat new_noreturn_img(H, W, CV_32FC1, 0.0);
         cv::Mat new_prob_noreturn_img(H, W, CV_32FC1, 0.0);
 
+        cv::Mat zero_range_msk(H, W, CV_32FC1, 0.0);
+        
+
         for (int u = 0; u < H; u++) {
             for (int v = 0; v < W; v++) {
                 const size_t vv = (v + px_offset[u]) % W;
@@ -175,14 +178,25 @@ namespace fog
         }
         else
         {
+            zero_range_msk.setTo(1.0, zero_range_img > new_range_img);
 
+            std::cout << "zero_range_msk.rows" << zero_range_msk.rows << std::endl;
+            std::cout << "zero_range_msk.cols" << zero_range_msk.cols << std::endl;
+            std::cout << "last_range_img.rows" << last_range_img.rows << std::endl;
+            std::cout << "last_range_img.cols" << last_range_img.cols << std::endl;
+
+            cv::multiply(zero_range_msk, last_range_img, zero_range_msk, 1.0);
+            // new_range_img = new_range_img + zero_range_msk;
+            
             // mask_update_range = new_range_img < 0.1;
             // blah.setTo(blah, mask_update_range);
 
             // new_range_img.setTo(0.0, zero_range_img < new_range_img);
 
             // Difference of Range Images
-            diff_range_img = abs(new_range_img - last_range_img);
+            diff_range_img = (new_range_img - last_range_img);
+            cv::multiply(diff_range_img, diff_range_img, diff_range_img, 1.0);
+
             diff_range_img.setTo(0.0, zero_range_img > last_range_img);
             diff_range_img.setTo(0.0, zero_range_img > new_range_img);
             diff_range_img.setTo(0.0, max_range_img < new_range_img);
@@ -191,14 +205,14 @@ namespace fog
             cv::Scalar avg = cv::mean(diff_range_img);
             std::cout << "avg" << avg << std::endl;
 
-            new_conf_img = 0.75 * last_conf_img;
+            new_conf_img = 0.9 * last_conf_img;
             new_conf_img = new_conf_img + diff_range_img;
 
             // Compute binary no-return image (1 = no return, 0 = return)
             float thresh = 0.0;
             float maxval = 0.1;
             cv::threshold(new_range_img, new_noreturn_img, thresh, maxval, THRESH_BINARY_INV);
-            new_prob_noreturn_img = 0.75 * last_prob_noreturn_img;
+            new_prob_noreturn_img = 0.9 * last_prob_noreturn_img;
             new_prob_noreturn_img = new_prob_noreturn_img + new_noreturn_img;
         }
         
@@ -227,7 +241,6 @@ namespace fog
         pub_prob_noreturn_img_.publish(prob_noreturn_msg.toImageMsg());
 
         last_range_img                      = new_range_img;
-
 
         // last_range_img.setTo(last_range_img, zero_range_img > last_range_img);
         // diff_range_img.setTo(0.0, zero_range_img > new_range_img);
