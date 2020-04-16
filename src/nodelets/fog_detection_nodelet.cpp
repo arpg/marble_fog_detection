@@ -157,6 +157,7 @@ namespace fog
         cv::Mat nonzero_range_img(H, W, CV_32FC1, 0.1);
         cv::Mat range_img(H, W, CV_32FC1, 0.0);
         cv::Mat avg_range_img(H, W, CV_32FC1, 0.0);
+        cv::Mat diff_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat var_s_raw_img(H, W, CV_32FC1, 0.0);
         cv::Mat dev_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat dev_diff_range_img(H, W, CV_32FC1, 0.0);
@@ -179,50 +180,31 @@ namespace fog
             }
         }
 
-        cv::Mat diff_range_img(H, W, CV_32FC1, 0.0);
-
         if(last_range_img.rows == 0 && last_range_img.cols == 0)
         {
         }
         else
         {
-            zero_range_msk.setTo(1.0, zero_range_img > range_img);
-
-            // std::cout << "zero_range_msk.rows" << zero_range_msk.rows << std::endl;
-            // std::cout << "zero_range_msk.cols" << zero_range_msk.cols << std::endl;
-            // std::cout << "last_range_img.rows" << last_range_img.rows << std::endl;
-            // std::cout << "last_range_img.cols" << last_range_img.cols << std::endl;
-
-            cv::multiply(zero_range_msk, last_range_img, zero_range_msk, 1.0);
-            // range_img = range_img + zero_range_msk;
-            
-            // mask_update_range = range_img < 0.1;
-            // blah.setTo(blah, mask_update_range);
-
-            // range_img.setTo(0.0, zero_range_img < range_img);
-
-            // Difference of Range Images
+            // Difference of range images
             diff_range_img = abs(range_img - last_range_img);
-            // cv::multiply(diff_range_img, diff_range_img, diff_range_img, 1.0);
-
-            // diff_range_img.setTo(0.0, zero_range_img > last_range_img);
-            diff_range_img.setTo(0.0, zero_range_img > range_img);
-            // diff_range_img.setTo(0.0, max_range_img < range_img);
-            // diff_range_img.setTo(0.0, max_range_img < last_range_img);
             
-            float thresh = 0.0;
-            float maxval = 1.0;
-            cv::threshold(range_img, return_img, thresh, maxval, THRESH_BINARY);
+            // Binarize depth (range) image
+            cv::threshold(range_img, return_img, 0.0, 1.0, THRESH_BINARY);
 
             // cv::blur(range_img, mean_s_img, cv::Size(9,9)); //Or whatever blurring you want
+
+            // Average range image
             cv::boxFilter(range_img, avg_range_img, -1, cv::Size(9,9), cv::Point(-1,-1), false);
+
+            // Average binarized range image (return image)
             cv::boxFilter(return_img, return_sum_img, -1, cv::Size(9,9), cv::Point(-1,-1), false);
 
+            // Scale average range image
             cv::divide(avg_range_img, return_sum_img, avg_range_img);
 
-            // https://stackoverflow.com/questions/18233691/how-to-index-and-modify-an-opencv-matrix
-
+            // Subtract range image from average range image, threshold betwneen 0 and 10
             cv::threshold(range_img - avg_range_img, dev_range_img, thresh, thresh, THRESH_TOZERO);
+            cv::threshold(dev_range_img, dev_range_img, 10.0, 10.0, THRESH_TRUNC);
 
             double min = 0, max = 0;
             cv::Point minLoc(-1, -1), maxLoc(-1, -1);
@@ -230,8 +212,10 @@ namespace fog
             std::cout << "min: " << min << std::endl;
             std::cout << "max: " << max << std::endl;
 
+            // Compute difference between this frame and last frame (to remove dc content aka static gradients)
             dev_diff_range_img = abs(dev_range_img - last_dev_range_img);
 
+            // Accumulate
             var_t_img = 0.9 * last_var_t_img;
             var_t_img = var_t_img + diff_range_img;
 
@@ -240,6 +224,7 @@ namespace fog
             prob_noreturn_img = 0.9 * last_prob_noreturn_img;
             prob_noreturn_img = prob_noreturn_img + noreturn_img;
 
+            // https://stackoverflow.com/questions/18233691/how-to-index-and-modify-an-opencv-matrix
         }
 
         // Publish Range Image
