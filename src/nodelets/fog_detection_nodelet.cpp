@@ -39,9 +39,10 @@ namespace fog
 
         // Publish Point Cloud
         pub_conf_pcl_           = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
-        pub_mean_s_img_         = private_nh.advertise<sensor_msgs::Image>("out_mean_s_img", 10);
+        pub_avg_range_img_      = private_nh.advertise<sensor_msgs::Image>("out_avg_range_img", 10);
+        pub_dev_range_img_      = private_nh.advertise<sensor_msgs::Image>("out_dev_range_img", 10);
+        pub_dev_diff_range_img_ = private_nh.advertise<sensor_msgs::Image>("out_dev_diff_range_img", 10);
         pub_var_t_img_          = private_nh.advertise<sensor_msgs::Image>("out_var_t_img", 10);
-        pub_var_s_img_          = private_nh.advertise<sensor_msgs::Image>("out_var_s_img", 10);
         pub_noreturn_img_       = private_nh.advertise<sensor_msgs::Image>("out_noreturn_img", 10);
         pub_prob_noreturn_img_  = private_nh.advertise<sensor_msgs::Image>("prob_noreturn_img", 10);
         pub_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
@@ -154,16 +155,16 @@ namespace fog
         cv::Mat zero_range_img(H, W, CV_32FC1, 0.1);
         cv::Mat max_range_img(H, W, CV_32FC1, 20.0);
         cv::Mat nonzero_range_img(H, W, CV_32FC1, 0.1);
-        cv::Mat new_range_img(H, W, CV_32FC1, 0.0);
-        cv::Mat mean_s_img(H, W, CV_32FC1, 0.0);
+        cv::Mat range_img(H, W, CV_32FC1, 0.0);
+        cv::Mat avg_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat var_s_raw_img(H, W, CV_32FC1, 0.0);
-        cv::Mat var_s_img(H, W, CV_32FC1, 0.0);
-        cv::Mat diff_var_s_img(H, W, CV_32FC1, 0.0);
+        cv::Mat dev_range_img(H, W, CV_32FC1, 0.0);
+        cv::Mat dev_diff_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat var_t_img(H, W, CV_32FC1, 0.0);
-        cv::Mat new_return_img(H, W, CV_32FC1, 0.0);
-        cv::Mat new_return_sum_img(H, W, CV_32FC1, 0.0);
-        cv::Mat new_noreturn_img(H, W, CV_32FC1, 0.0);
-        cv::Mat new_prob_noreturn_img(H, W, CV_32FC1, 0.0);
+        cv::Mat return_img(H, W, CV_32FC1, 0.0);
+        cv::Mat return_sum_img(H, W, CV_32FC1, 0.0);
+        cv::Mat noreturn_img(H, W, CV_32FC1, 0.0);
+        cv::Mat prob_noreturn_img(H, W, CV_32FC1, 0.0);
 
         cv::Mat zero_range_msk(H, W, CV_32FC1, 0.0);
 
@@ -172,7 +173,7 @@ namespace fog
                 const size_t vv = (v + px_offset[u]) % W;
                 const size_t index = vv * H + u;
                 const auto& pt = cloud_in[index];
-                new_range_img.at<float>(u,v) = pt.range * 5e-3;
+                range_img.at<float>(u,v) = pt.range * 5e-3;
                 noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
                 intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
             }
@@ -185,7 +186,7 @@ namespace fog
         }
         else
         {
-            zero_range_msk.setTo(1.0, zero_range_img > new_range_img);
+            zero_range_msk.setTo(1.0, zero_range_img > range_img);
 
             // std::cout << "zero_range_msk.rows" << zero_range_msk.rows << std::endl;
             // std::cout << "zero_range_msk.cols" << zero_range_msk.cols << std::endl;
@@ -193,83 +194,85 @@ namespace fog
             // std::cout << "last_range_img.cols" << last_range_img.cols << std::endl;
 
             cv::multiply(zero_range_msk, last_range_img, zero_range_msk, 1.0);
-            // new_range_img = new_range_img + zero_range_msk;
+            // range_img = range_img + zero_range_msk;
             
-            // mask_update_range = new_range_img < 0.1;
+            // mask_update_range = range_img < 0.1;
             // blah.setTo(blah, mask_update_range);
 
-            // new_range_img.setTo(0.0, zero_range_img < new_range_img);
+            // range_img.setTo(0.0, zero_range_img < range_img);
 
             // Difference of Range Images
-            diff_range_img = abs(new_range_img - last_range_img);
+            diff_range_img = abs(range_img - last_range_img);
             // cv::multiply(diff_range_img, diff_range_img, diff_range_img, 1.0);
 
             // diff_range_img.setTo(0.0, zero_range_img > last_range_img);
-            diff_range_img.setTo(0.0, zero_range_img > new_range_img);
-            // diff_range_img.setTo(0.0, max_range_img < new_range_img);
+            diff_range_img.setTo(0.0, zero_range_img > range_img);
+            // diff_range_img.setTo(0.0, max_range_img < range_img);
             // diff_range_img.setTo(0.0, max_range_img < last_range_img);
             
             float thresh = 0.0;
             float maxval = 1.0;
-            cv::threshold(new_range_img, new_return_img, thresh, maxval, THRESH_BINARY);
-            // cv::blur(new_range_img, mean_s_img, cv::Size(9,9)); //Or whatever blurring you want
-            cv::boxFilter(new_range_img, mean_s_img, -1, cv::Size(9,9), cv::Point(-1,-1), false);
-            cv::boxFilter(new_return_img, new_return_sum_img, -1, cv::Size(9,9), cv::Point(-1,-1), false);
+            cv::threshold(range_img, return_img, thresh, maxval, THRESH_BINARY);
 
+            // cv::blur(range_img, mean_s_img, cv::Size(9,9)); //Or whatever blurring you want
+            cv::boxFilter(range_img, avg_range_img, -1, cv::Size(9,9), cv::Point(-1,-1), false);
+            cv::boxFilter(return_img, return_sum_img, -1, cv::Size(9,9), cv::Point(-1,-1), false);
 
-            cv::divide(mean_s_img, new_return_sum_img, mean_s_img);
+            cv::divide(avg_range_img, return_sum_img, avg_range_img);
 
-            // mean_s_img.setTo( cv::divide(mean_s_img, new_return_sum_img), new_return_img != 0);
-            // // mean_s_img(new_return_img!=0) /= new_return_sum_img(new_return_img!=0);
-            // mean_s_img.setTo(0, new_return_img == 0);
-            // // mean_s_img(new_return_img==0) = 0;
             // https://stackoverflow.com/questions/18233691/how-to-index-and-modify-an-opencv-matrix
 
-            var_s_raw_img = new_range_img - mean_s_img;
-            cv::threshold(var_s_raw_img, var_s_img, thresh, thresh, THRESH_TOZERO);
-            // var_s_img = var_s_raw_img;
+            cv::threshold(range_img - avg_range_img, dev_range_img, thresh, thresh, THRESH_TOZERO);
 
             double min = 0, max = 0;
             cv::Point minLoc(-1, -1), maxLoc(-1, -1);
-            cv::minMaxLoc(var_s_img, &min, &max, &minLoc, &maxLoc);
+            cv::minMaxLoc(dev_range_img, &min, &max, &minLoc, &maxLoc);
             std::cout << "min: " << min << std::endl;
             std::cout << "max: " << max << std::endl;
 
-            diff_var_s_img = abs(var_s_img - last_var_s_img);
+            dev_diff_range_img = abs(dev_range_img - last_dev_range_img);
 
             var_t_img = 0.9 * last_var_t_img;
             var_t_img = var_t_img + diff_range_img;
 
             // Compute binary no-return image (1 = no return, 0 = return)
-            cv::threshold(new_range_img, new_noreturn_img, thresh, maxval, THRESH_BINARY_INV);
-            new_prob_noreturn_img = 0.9 * last_prob_noreturn_img;
-            new_prob_noreturn_img = new_prob_noreturn_img + new_noreturn_img;
+            cv::threshold(range_img, noreturn_img, thresh, maxval, THRESH_BINARY_INV);
+            prob_noreturn_img = 0.9 * last_prob_noreturn_img;
+            prob_noreturn_img = prob_noreturn_img + noreturn_img;
 
         }
 
-        // Publish Mean (in Space) Image
+        // Publish Range Image
         cv_bridge::CvImage new_range_msg;
         new_range_msg.encoding                  = sensor_msgs::image_encodings::TYPE_32FC1;
-        new_range_msg.image                     = new_range_img;
+        new_range_msg.image                     = range_img;
         new_range_msg.header.stamp              = ros::Time::now();
         new_range_msg.header.frame_id           = cloud_in_ros->header.frame_id;        
         pub_range_img_.publish(new_range_msg.toImageMsg());
 
-        // Publish Mean (in Space) Image
-        cv_bridge::CvImage mean_s_msg;
-        mean_s_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        mean_s_msg.image                      = mean_s_img;
-        mean_s_msg.header.stamp               = ros::Time::now();
-        mean_s_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        pub_mean_s_img_.publish(mean_s_msg.toImageMsg());
+        // Publish Range Avg Image
+        cv_bridge::CvImage avg_range_msg;
+        avg_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+        avg_range_msg.image                      = avg_range_img;
+        avg_range_msg.header.stamp               = ros::Time::now();
+        avg_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+        pub_avg_range_img_.publish(avg_range_msg.toImageMsg());
 
-        // Publish Variance (in Space) Image
-        cv_bridge::CvImage var_s_msg;
-        var_s_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        var_s_msg.image                      = var_s_img;
-        var_s_msg.header.stamp               = ros::Time::now();
-        var_s_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        pub_var_s_img_.publish(var_s_msg.toImageMsg());
+        // Publish Range Deviation Image
+        cv_bridge::CvImage dev_range_msg;
+        dev_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+        dev_range_msg.image                      = dev_range_img;
+        dev_range_msg.header.stamp               = ros::Time::now();
+        dev_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+        pub_dev_range_img_.publish(dev_range_msg.toImageMsg());
+
+        // Publish Range Deviation Diff Image
+        cv_bridge::CvImage dev_diff_range_msg;
+        dev_diff_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+        dev_diff_range_msg.image                      = dev_diff_range_img;
+        dev_diff_range_msg.header.stamp               = ros::Time::now();
+        dev_diff_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+        pub_dev_diff_range_img_.publish(dev_diff_range_msg.toImageMsg());
         
         // Publish Variance (in Time) Image
         cv_bridge::CvImage var_t_msg;
@@ -282,7 +285,7 @@ namespace fog
         // Publish No Return Image
         cv_bridge::CvImage noreturn_msg;
         noreturn_msg.encoding               = sensor_msgs::image_encodings::TYPE_32FC1;
-        noreturn_msg.image                  = new_noreturn_img;
+        noreturn_msg.image                  = noreturn_img;
         noreturn_msg.header.stamp           = ros::Time::now();
         noreturn_msg.header.frame_id        = cloud_in_ros->header.frame_id;        
         pub_noreturn_img_.publish(noreturn_msg.toImageMsg());
@@ -290,17 +293,16 @@ namespace fog
         // Publish No Return Prob Image
         cv_bridge::CvImage prob_noreturn_msg;
         prob_noreturn_msg.encoding          = sensor_msgs::image_encodings::TYPE_32FC1;
-        prob_noreturn_msg.image             = diff_var_s_img;
+        prob_noreturn_msg.image             = prob_noreturn_img;
         prob_noreturn_msg.header.stamp      = ros::Time::now();
         prob_noreturn_msg.header.frame_id   = cloud_in_ros->header.frame_id;        
         pub_prob_noreturn_img_.publish(prob_noreturn_msg.toImageMsg());
 
-        last_range_img          = new_range_img;
-        last_mean_s_img         = mean_s_img;
-        last_var_s_img          = var_s_img;
+        last_range_img          = range_img;
+        last_dev_range_img      = dev_range_img;
         last_var_t_img          = var_t_img;
-        last_noreturn_img       = new_noreturn_img;
-        last_prob_noreturn_img  = new_prob_noreturn_img;
+        last_noreturn_img       = noreturn_img;
+        last_prob_noreturn_img  = prob_noreturn_img;
 
     };
 
@@ -324,23 +326,14 @@ namespace fog
         CvImageConstPtr source = toCvShare(in_msg);
 
         // Crop image
-        cv::Mat new_range_img = source->image(cv::Rect(x_offset, y_offset, width, height));
+        cv::Mat range_img = source->image(cv::Rect(x_offset, y_offset, width, height));
 
         // The range image is of type CV_8UC1/mono8 (0-255, 0 is no return, higher is closer to sensor)
-        new_range_img.convertTo(new_range_img,CV_32FC1, 0.39215686274); // 100/255 = 0.39215686274
+        range_img.convertTo(range_img,CV_32FC1, 0.39215686274); // 100/255 = 0.39215686274
 
-        cv::Mat diff_range_img = abs(new_range_img - last_range_img);
+        cv::Mat diff_range_img = abs(range_img - last_range_img);
 
-        // std::cout << "diff_range_img = " << std::endl << " "  << diff_range_img << std::endl << std::endl;
-
-        cv_bridge::CvImage var_t_msg;
-        var_t_msg.header   = in_msg->header; // Same timestamp and tf frame as input image
-        var_t_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1; // Or whatever
-        var_t_msg.image    = diff_range_img; // Your cv::Mat
-
-        pub_img_.publish(var_t_msg.toImageMsg());
-
-        last_range_img = new_range_img;
+        last_range_img = range_img;
 
     };
 
@@ -370,15 +363,6 @@ namespace fog
         new_intensity_img.convertTo(new_intensity_img, CV_32FC1, 0.39215686274);
 
         cv::Mat diff_intensity_img = abs(new_intensity_img - last_intensity_img);
-
-        // std::cout << "diff_intensity_img" << std::endl << " "  << diff_intensity_img << std::endl << std::endl;
-
-        cv_bridge::CvImage var_t_msg;
-        var_t_msg.header   = in_msg->header; // Same timestamp and tf frame as input image
-        var_t_msg.encoding = sensor_msgs::image_encodings::TYPE_32FC1; // Or whatever
-        var_t_msg.image    = diff_intensity_img; // Your cv::Mat
-
-        pub_img_.publish(var_t_msg.toImageMsg());
 
         last_intensity_img = new_intensity_img;
 

@@ -93,13 +93,17 @@ namespace fog
 
       ros::Publisher pub_output_;
       ros::Publisher pub_conf_pcl_;
-      ros::Publisher pub_mean_s_img_;
+
+      ros::Publisher pub_range_img_;
+      ros::Publisher pub_avg_range_img_;
+      ros::Publisher pub_dev_range_img_;
+      ros::Publisher pub_dev_diff_range_img_;
+
       ros::Publisher pub_var_t_img_;
       ros::Publisher pub_var_s_img_;
 
       ros::Publisher pub_prob_noreturn_img_;
       ros::Publisher pub_noreturn_img_;
-      ros::Publisher pub_range_img_;
       ros::Publisher pub_intensity_img_;
 
       ros::NodeHandle nh;
@@ -190,7 +194,7 @@ namespace fog
       cv::Mat last_range_img;
       cv::Mat last_mean_s_img;
       cv::Mat last_var_t_img;
-      cv::Mat last_var_s_img;
+      cv::Mat last_dev_range_img;
       cv::Mat last_noreturn_img;
       cv::Mat last_prob_noreturn_img;
       
