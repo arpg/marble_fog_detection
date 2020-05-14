@@ -38,15 +38,17 @@ namespace fog
         sub_low_depth_pcl_ = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
 
         // Publish Point Cloud
-        pub_conf_pcl_           = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
-        pub_avg_range_img_      = private_nh.advertise<sensor_msgs::Image>("out_avg_range_img", 10);
-        pub_dev_range_img_      = private_nh.advertise<sensor_msgs::Image>("out_dev_range_img", 10);
-        pub_dev_diff_range_img_ = private_nh.advertise<sensor_msgs::Image>("out_dev_diff_range_img", 10);
-        pub_var_t_img_          = private_nh.advertise<sensor_msgs::Image>("out_var_t_img", 10);
-        pub_noreturn_img_       = private_nh.advertise<sensor_msgs::Image>("out_noreturn_img", 10);
-        pub_prob_noreturn_img_  = private_nh.advertise<sensor_msgs::Image>("prob_noreturn_img", 10);
-        pub_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
-        pub_intensity_img_      = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
+        pub_conf_pcl_               = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
+        pub_seg_pcl_                = private_nh.advertise<PointCloud>("out_seg_pcl", 10);
+        pub_avg_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_avg_range_img", 10);
+        pub_dev_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_dev_range_img", 10);
+        pub_dev_diff_range_img_     = private_nh.advertise<sensor_msgs::Image>("out_dev_diff_range_img", 10);
+        pub_var_t_img_              = private_nh.advertise<sensor_msgs::Image>("out_var_t_img", 10);
+        pub_noreturn_img_           = private_nh.advertise<sensor_msgs::Image>("out_noreturn_img", 10);
+        pub_noreturn_lowres_img_    = private_nh.advertise<sensor_msgs::Image>("out_noreturn_lowres_img", 10);
+        pub_prob_noreturn_img_      = private_nh.advertise<sensor_msgs::Image>("prob_noreturn_img", 10);
+        pub_range_img_              = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
+        pub_intensity_img_          = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
 
         // Create static tf broadcaster (-30 pitch, Realsense pointed down)
         // rosrun tf static_transform_publisher 0.0 0.0 0.0 0.0 -0.00913852259 0.0 base_link royale_camera_optical_frame 1000
@@ -124,171 +126,288 @@ namespace fog
     void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
     {
         ouster_ros::OS1::CloudOS1 cloud_in{};
-
         pcl::fromROSMsg(*cloud_in_ros, cloud_in);
 
-        sensor_msgs::Image range_image;
-        sensor_msgs::Image noise_image;
-        sensor_msgs::Image intensity_image;
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
 
-        // Get PCL metadata
-        int W = cloud_in_ros->width;
-        int H = cloud_in_ros->height;
-        std::vector<int>  px_offset = ouster::OS1::get_px_offset(W);
-        // for 64 channels, should be [ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
-        //                              0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
+        // sensor_msgs::Image range_image;
+        // sensor_msgs::Image noise_image;
+        // sensor_msgs::Image intensity_image;
 
-        // Setup Noise Image
-        noise_image.width = W;
-        noise_image.height = H;
-        noise_image.step = W;
-        noise_image.encoding = "mono8";
-        noise_image.data.resize(W * H);
+        // // Get PCL metadata
+        // int W = cloud_in_ros->width;
+        // int H = cloud_in_ros->height;
+        // std::vector<int>  px_offset = ouster::OS1::get_px_offset(W);
+        // // for 64 channels, should be [ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
+        // //                              0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
 
-        // Set up Intensity Image
-        intensity_image.width = W;
-        intensity_image.height = H;
-        intensity_image.step = W;
-        intensity_image.encoding = "mono8";
-        intensity_image.data.resize(W * H);
+        // // Setup Noise Image
+        // noise_image.width = W;
+        // noise_image.height = H;
+        // noise_image.step = W;
+        // noise_image.encoding = "mono8";
+        // noise_image.data.resize(W * H);
 
-        cv::Mat zero_range_img(H, W, CV_32FC1, 0.1);
-        cv::Mat max_range_img(H, W, CV_32FC1, 20.0);
-        cv::Mat nonzero_range_img(H, W, CV_32FC1, 0.1);
-        cv::Mat range_img(H, W, CV_32FC1, 0.0);
-        cv::Mat avg_range_img(H, W, CV_32FC1, 0.0);
-        cv::Mat diff_range_img(H, W, CV_32FC1, 0.0);
-        cv::Mat var_s_raw_img(H, W, CV_32FC1, 0.0);
-        cv::Mat dev_range_img(H, W, CV_32FC1, 0.0);
-        cv::Mat dev_diff_range_img(H, W, CV_32FC1, 0.0);
-        cv::Mat var_t_img(H, W, CV_32FC1, 0.0);
-        cv::Mat return_img(H, W, CV_32FC1, 0.0);
-        cv::Mat return_sum_img(H, W, CV_32FC1, 0.0);
-        cv::Mat noreturn_img(H, W, CV_32FC1, 0.0);
-        cv::Mat prob_noreturn_img(H, W, CV_32FC1, 0.0);
+        // // Set up Intensity Image
+        // intensity_image.width = W;
+        // intensity_image.height = H;
+        // intensity_image.step = W;
+        // intensity_image.encoding = "mono8";
+        // intensity_image.data.resize(W * H);
 
-        cv::Mat zero_range_msk(H, W, CV_32FC1, 0.0);
+        // cv::Mat zero_range_img(H, W, CV_32FC1, 0.1);
+        // cv::Mat max_range_img(H, W, CV_32FC1, 20.0);
+        // cv::Mat nonzero_range_img(H, W, CV_32FC1, 0.1);
+        // cv::Mat range_img(H, W, CV_32FC1, 0.0);
+        // cv::Mat avg_range_img(H, W, CV_32FC1, 0.0);
+        // cv::Mat diff_range_img(H, W, CV_32FC1, 0.0);
+        // cv::Mat var_s_raw_img(H, W, CV_32FC1, 0.0);
+        // cv::Mat dev_range_img(H, W, CV_32FC1, 0.0);
+        // cv::Mat dev_diff_range_img(H, W, CV_32FC1, 0.0);
+        // cv::Mat var_t_img(H, W, CV_32FC1, 0.0);
+        // cv::Mat return_img(H, W, CV_32FC1, 0.0);
+        // cv::Mat return_sum_img(H, W, CV_32FC1, 0.0);
+        // cv::Mat noreturn_img(H, W, CV_32FC1, 0.0);
+        // cv::Mat prob_noreturn_img(H, W, CV_32FC1, 0.0);
 
-        for (int u = 0; u < H; u++) {
-            for (int v = 0; v < W; v++) {
-                const size_t vv = (v + px_offset[u]) % W;
-                const size_t index = vv * H + u;
-                const auto& pt = cloud_in[index];
-                range_img.at<float>(u,v) = pt.range * 5e-3;
-                noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
-                intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
-            }
-        }
+        // cv::Mat zero_range_msk(H, W, CV_32FC1, 0.0);
 
-        if(last_range_img.rows == 0 && last_range_img.cols == 0)
-        {
-        }
-        else
-        {
-            // Difference of range images
-            diff_range_img = abs(range_img - last_range_img);
+        // cv::Mat noreturn_lowres_img;
+
+        // for (int u = 0; u < H; u++) {
+        //     for (int v = 0; v < W; v++) {
+        //         const size_t vv = (v + px_offset[u]) % W;
+        //         const size_t index = vv * H + u;
+        //         const auto& pt = cloud_in[index];
+        //         range_img.at<float>(u,v) = pt.range * 5e-3;
+        //         noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
+        //         intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
+        //     }
+        // }
+
+        // if(last_range_img.rows == 0 && last_range_img.cols == 0)
+        // {
+        // }
+        // else
+        // {
+        //     // Difference of range images
+        //     diff_range_img = abs(range_img - last_range_img);
             
-            // Binarize depth (range) image
-            cv::threshold(range_img, return_img, 0.0, 1.0, THRESH_BINARY);
+        //     // Binarize depth (range) image
+        //     cv::threshold(range_img, return_img, 0.0, 1.0, THRESH_BINARY);
 
-            // cv::blur(range_img, mean_s_img, cv::Size(9,9)); //Or whatever blurring you want
+        //     // cv::blur(range_img, mean_s_img, cv::Size(9,9)); //Or whatever blurring you want
 
-            // Average range image
-            cv::boxFilter(range_img, avg_range_img, -1, cv::Size(9,9), cv::Point(-1,-1), false);
+        //     // Average range image
+        //     cv::boxFilter(range_img, avg_range_img, -1, cv::Size(9,9), cv::Point(-1,-1), false);
 
-            // Average binarized range image (return image)
-            cv::boxFilter(return_img, return_sum_img, -1, cv::Size(9,9), cv::Point(-1,-1), false);
+        //     // Average binarized range image (return image)
+        //     cv::boxFilter(return_img, return_sum_img, -1, cv::Size(9,9), cv::Point(-1,-1), false);
 
-            // Scale average range image
-            cv::divide(avg_range_img, return_sum_img, avg_range_img);
+        //     // Scale average range image
+        //     cv::divide(avg_range_img, return_sum_img, avg_range_img);
 
-            // Subtract range image from average range image, threshold betwneen 0 and 10
-            cv::threshold(range_img - avg_range_img, dev_range_img, thresh, thresh, THRESH_TOZERO);
-            cv::threshold(dev_range_img, dev_range_img, 10.0, 10.0, THRESH_TRUNC);
+        //     // Subtract range image from average range image, threshold betwneen 0 and 10
+        //     cv::threshold(range_img - avg_range_img, dev_range_img, 0.0, 0.0, THRESH_TOZERO);
+        //     cv::threshold(dev_range_img, dev_range_img, 10.0, 10.0, THRESH_TRUNC);
 
-            double min = 0, max = 0;
-            cv::Point minLoc(-1, -1), maxLoc(-1, -1);
-            cv::minMaxLoc(dev_range_img, &min, &max, &minLoc, &maxLoc);
-            std::cout << "min: " << min << std::endl;
-            std::cout << "max: " << max << std::endl;
+        //     double min = 0, max = 0;
+        //     cv::Point minLoc(-1, -1), maxLoc(-1, -1);
+        //     cv::minMaxLoc(dev_range_img, &min, &max, &minLoc, &maxLoc);
+        //     std::cout << "min: " << min << std::endl;
+        //     std::cout << "max: " << max << std::endl;
 
-            // Compute difference between this frame and last frame (to remove dc content aka static gradients)
-            dev_diff_range_img = abs(dev_range_img - last_dev_range_img);
+        //     // Compute difference between this frame and last frame (to remove dc content aka static gradients)
+        //     dev_diff_range_img = abs(dev_range_img - last_dev_range_img);
 
-            // Accumulate
-            var_t_img = 0.9 * last_var_t_img;
-            var_t_img = var_t_img + diff_range_img;
+        //     // Accumulate
+        //     var_t_img = 0.9 * last_var_t_img;
+        //     var_t_img = var_t_img + diff_range_img;
 
-            // Compute binary no-return image (1 = no return, 0 = return)
-            cv::threshold(range_img, noreturn_img, thresh, maxval, THRESH_BINARY_INV);
-            prob_noreturn_img = 0.9 * last_prob_noreturn_img;
-            prob_noreturn_img = prob_noreturn_img + noreturn_img;
+        //     // Compute binary no-return image (1 = no return, 0 = return)
+        //     cv::threshold(range_img, noreturn_img, 0.0, 1.0, THRESH_BINARY_INV);
 
-            // https://stackoverflow.com/questions/18233691/how-to-index-and-modify-an-opencv-matrix
+        //     // Average noreturn down to single row
+        //     cv::Mat no_return_arr;
+        //     cv::reduce(noreturn_img, no_return_arr, 0, CV_REDUCE_AVG, -1);
+
+        //     // Resize down to less columns
+        //     resize(noreturn_img, noreturn_lowres_img, cv::Size(48,4), 0, 0, INTER_AREA);
+            
+        //     // std::cout << "no_return_arr: " << no_return_arr << std::endl;
+
+        //     // Accumulate
+        //     prob_noreturn_img = 0.9 * last_prob_noreturn_img;
+        //     prob_noreturn_img = prob_noreturn_img + noreturn_img;
+
+        //     // https://stackoverflow.com/questions/18233691/how-to-index-and-modify-an-opencv-matrix
+        // }
+
+        // // Publish Range Image
+        // cv_bridge::CvImage new_range_msg;
+        // new_range_msg.encoding                  = sensor_msgs::image_encodings::TYPE_32FC1;
+        // new_range_msg.image                     = range_img;
+        // new_range_msg.header.stamp              = ros::Time::now();
+        // new_range_msg.header.frame_id           = cloud_in_ros->header.frame_id;        
+        // pub_range_img_.publish(new_range_msg.toImageMsg());
+
+        // // Publish Range Avg Image
+        // cv_bridge::CvImage avg_range_msg;
+        // avg_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+        // avg_range_msg.image                      = avg_range_img;
+        // avg_range_msg.header.stamp               = ros::Time::now();
+        // avg_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+        // pub_avg_range_img_.publish(avg_range_msg.toImageMsg());
+
+        // // Publish Range Deviation Image
+        // cv_bridge::CvImage dev_range_msg;
+        // dev_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+        // dev_range_msg.image                      = dev_range_img;
+        // dev_range_msg.header.stamp               = ros::Time::now();
+        // dev_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+        // pub_dev_range_img_.publish(dev_range_msg.toImageMsg());
+
+        // // Publish Range Deviation Diff Image
+        // cv_bridge::CvImage dev_diff_range_msg;
+        // dev_diff_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+        // dev_diff_range_msg.image                      = dev_diff_range_img;
+        // dev_diff_range_msg.header.stamp               = ros::Time::now();
+        // dev_diff_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+        // pub_dev_diff_range_img_.publish(dev_diff_range_msg.toImageMsg());
+        
+        // // Publish Variance (in Time) Image
+        // cv_bridge::CvImage var_t_msg;
+        // var_t_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+        // var_t_msg.image                      = var_t_img;
+        // var_t_msg.header.stamp               = ros::Time::now();
+        // var_t_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+        // pub_var_t_img_.publish(var_t_msg.toImageMsg());
+
+        // // Publish No Return Image
+        // cv_bridge::CvImage noreturn_msg;
+        // noreturn_msg.encoding               = sensor_msgs::image_encodings::TYPE_32FC1;
+        // noreturn_msg.image                  = noreturn_img;
+        // noreturn_msg.header.stamp           = ros::Time::now();
+        // noreturn_msg.header.frame_id        = cloud_in_ros->header.frame_id;        
+        // pub_noreturn_img_.publish(noreturn_msg.toImageMsg());
+
+        // // Publish No Return (Low Res) Image
+        // cv_bridge::CvImage noreturn_lowres_msg;
+        // noreturn_lowres_msg.encoding               = sensor_msgs::image_encodings::TYPE_32FC1;
+        // noreturn_lowres_msg.image                  = noreturn_lowres_img;
+        // noreturn_lowres_msg.header.stamp           = ros::Time::now();
+        // noreturn_lowres_msg.header.frame_id        = cloud_in_ros->header.frame_id;        
+        // pub_noreturn_lowres_img_.publish(noreturn_lowres_msg.toImageMsg());
+
+        // // Publish No Return Prob Image
+        // cv_bridge::CvImage prob_noreturn_msg;
+        // prob_noreturn_msg.encoding          = sensor_msgs::image_encodings::TYPE_32FC1;
+        // prob_noreturn_msg.image             = prob_noreturn_img;
+        // prob_noreturn_msg.header.stamp      = ros::Time::now();
+        // prob_noreturn_msg.header.frame_id   = cloud_in_ros->header.frame_id;        
+        // pub_prob_noreturn_img_.publish(prob_noreturn_msg.toImageMsg());
+
+        // last_range_img          = range_img;
+        // last_dev_range_img      = dev_range_img;
+        // last_var_t_img          = var_t_img;
+        // last_noreturn_img       = noreturn_img;
+        // last_prob_noreturn_img  = prob_noreturn_img;
+
+
+
+
+        // Attempt to segment different parts of the point cloud!
+
+        // Create the filtering object: downsample the dataset using a leaf size of 1cm
+        pcl::VoxelGrid<pcl::PointXYZ> vg;
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_f (new pcl::PointCloud<pcl::PointXYZ>);
+        vg.setInputCloud (cloud_in2);
+        vg.setLeafSize (0.1f, 0.1f, 0.1f);
+        vg.filter (*cloud_filtered);
+        std::cout << "PointCloud after filtering has: " << cloud_filtered->points.size ()  << " data points." << std::endl; //*
+
+        // Create the segmentation object for the planar model and set all the parameters
+        pcl::SACSegmentation<pcl::PointXYZ> seg;
+        pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
+        pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_plane (new pcl::PointCloud<pcl::PointXYZ> ());
+        pcl::PCDWriter writer;
+        seg.setOptimizeCoefficients (true);
+        seg.setModelType (pcl::SACMODEL_PLANE);
+        seg.setMethodType (pcl::SAC_RANSAC);
+        seg.setMaxIterations (10);
+        seg.setDistanceThreshold (2.0);
+
+        int i=0, nr_points = (int) cloud_filtered->points.size ();
+        while (cloud_filtered->points.size () > 0.3 * nr_points)
+        {
+            // Segment the largest planar component from the remaining cloud
+            seg.setInputCloud (cloud_filtered);
+            seg.segment (*inliers, *coefficients);
+            if (inliers->indices.size () == 0)
+            {
+            std::cout << "Could not estimate a planar model for the given dataset." << std::endl;
+            break;
+            }
+
+            // Extract the planar inliers from the input cloud
+            pcl::ExtractIndices<pcl::PointXYZ> extract;
+            extract.setInputCloud (cloud_filtered);
+            extract.setIndices (inliers);
+            extract.setNegative (false);
+
+            // Get the points associated with the planar surface
+            extract.filter (*cloud_plane);
+            std::cout << "PointCloud representing the planar component: " << cloud_plane->points.size () << " data points." << std::endl;
+
+            // Remove the planar inliers, extract the rest
+            extract.setNegative (true);
+            extract.filter (*cloud_f);
+            *cloud_filtered = *cloud_f;
         }
 
-        // Publish Range Image
-        cv_bridge::CvImage new_range_msg;
-        new_range_msg.encoding                  = sensor_msgs::image_encodings::TYPE_32FC1;
-        new_range_msg.image                     = range_img;
-        new_range_msg.header.stamp              = ros::Time::now();
-        new_range_msg.header.frame_id           = cloud_in_ros->header.frame_id;        
-        pub_range_img_.publish(new_range_msg.toImageMsg());
+        // Creating the KdTree object for the search method of the extraction
+        pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
+        tree->setInputCloud (cloud_filtered);
 
-        // Publish Range Avg Image
-        cv_bridge::CvImage avg_range_msg;
-        avg_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        avg_range_msg.image                      = avg_range_img;
-        avg_range_msg.header.stamp               = ros::Time::now();
-        avg_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        pub_avg_range_img_.publish(avg_range_msg.toImageMsg());
+        std::vector<pcl::PointIndices> cluster_indices;
+        pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
+        ec.setClusterTolerance (2.0);
+        ec.setMinClusterSize (1000);
+        ec.setMaxClusterSize (25000);
+        ec.setSearchMethod (tree);
+        ec.setInputCloud (cloud_filtered);
+        ec.extract (cluster_indices);
 
-        // Publish Range Deviation Image
-        cv_bridge::CvImage dev_range_msg;
-        dev_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        dev_range_msg.image                      = dev_range_img;
-        dev_range_msg.header.stamp               = ros::Time::now();
-        dev_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        pub_dev_range_img_.publish(dev_range_msg.toImageMsg());
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
 
-        // Publish Range Deviation Diff Image
-        cv_bridge::CvImage dev_diff_range_msg;
-        dev_diff_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        dev_diff_range_msg.image                      = dev_diff_range_img;
-        dev_diff_range_msg.header.stamp               = ros::Time::now();
-        dev_diff_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        pub_dev_diff_range_img_.publish(dev_diff_range_msg.toImageMsg());
-        
-        // Publish Variance (in Time) Image
-        cv_bridge::CvImage var_t_msg;
-        var_t_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        var_t_msg.image                      = var_t_img;
-        var_t_msg.header.stamp               = ros::Time::now();
-        var_t_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        pub_var_t_img_.publish(var_t_msg.toImageMsg());
+        for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
+        {
+            pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
 
-        // Publish No Return Image
-        cv_bridge::CvImage noreturn_msg;
-        noreturn_msg.encoding               = sensor_msgs::image_encodings::TYPE_32FC1;
-        noreturn_msg.image                  = noreturn_img;
-        noreturn_msg.header.stamp           = ros::Time::now();
-        noreturn_msg.header.frame_id        = cloud_in_ros->header.frame_id;        
-        pub_noreturn_img_.publish(noreturn_msg.toImageMsg());
+            for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
+            {
+                cloud_cluster->points.push_back (cloud_filtered->points[*pit]); //*
+            }
 
-        // Publish No Return Prob Image
-        cv_bridge::CvImage prob_noreturn_msg;
-        prob_noreturn_msg.encoding          = sensor_msgs::image_encodings::TYPE_32FC1;
-        prob_noreturn_msg.image             = prob_noreturn_img;
-        prob_noreturn_msg.header.stamp      = ros::Time::now();
-        prob_noreturn_msg.header.frame_id   = cloud_in_ros->header.frame_id;        
-        pub_prob_noreturn_img_.publish(prob_noreturn_msg.toImageMsg());
+            cloud_cluster->width = cloud_cluster->points.size ();
+            cloud_cluster->height = 1;
+            cloud_cluster->is_dense = true;
 
-        last_range_img          = range_img;
-        last_dev_range_img      = dev_range_img;
-        last_var_t_img          = var_t_img;
-        last_noreturn_img       = noreturn_img;
-        last_prob_noreturn_img  = prob_noreturn_img;
+            std::cout << "PointCloud representing the Cluster: " << cloud_cluster->points.size () << " data points." << std::endl;
+            // std::stringstream ss;
+            // ss << "cloud_cluster_" << j << ".pcd";
+            // writer.write<pcl::PointXYZ> (ss.str (), *cloud_cluster, false); //*
 
+            cloud_cluster->header.seq = seq;
+            cloud_cluster->header.frame_id = cloud_in2->header.frame_id;
+            pcl_conversions::toPCL(ros::Time::now(), cloud_cluster->header.stamp);
+            pub_seg_pcl_.publish (cloud_cluster);
+
+            seq++;
+        }
     };
 
     void FogDetectionNodelet::analyze_range_images(const sensor_msgs::ImageConstPtr& in_msg,
@@ -298,7 +417,6 @@ namespace fog
                                                    int width,
                                                    int height)
     {
-
         // Get cropping parameters
         int max_width = in_msg->width - x_offset;
         int max_height = in_msg->height - y_offset;

@@ -71,6 +71,14 @@
 #include <ouster_ros/OS1ConfigSrv.h>
 #include <ouster_ros/os1_ros.h>
 
+#include <pcl/ModelCoefficients.h>
+#include <pcl/filters/voxel_grid.h>
+#include <pcl/features/normal_3d.h>
+#include <pcl/sample_consensus/method_types.h>
+#include <pcl/sample_consensus/model_types.h>
+#include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/segmentation/extract_clusters.h>
+
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
 typedef PointCloud::Ptr ptr_cloud;
@@ -93,6 +101,7 @@ namespace fog
 
       ros::Publisher pub_output_;
       ros::Publisher pub_conf_pcl_;
+      ros::Publisher pub_seg_pcl_;
 
       ros::Publisher pub_range_img_;
       ros::Publisher pub_avg_range_img_;
@@ -104,6 +113,8 @@ namespace fog
 
       ros::Publisher pub_prob_noreturn_img_;
       ros::Publisher pub_noreturn_img_;
+      ros::Publisher pub_noreturn_lowres_img_;
+
       ros::Publisher pub_intensity_img_;
 
       ros::NodeHandle nh;
@@ -197,7 +208,7 @@ namespace fog
       cv::Mat last_dev_range_img;
       cv::Mat last_noreturn_img;
       cv::Mat last_prob_noreturn_img;
-      
+     
 
       pcl::search::Search<pcl::PointXYZ>::Ptr tree_xyz;
       typedef pcl::PointCloud<pcl::PointXYZINormal> PointCloudOut;
