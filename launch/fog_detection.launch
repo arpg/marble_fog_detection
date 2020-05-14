@@ -3,14 +3,14 @@
 
         <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
         <node pkg="nodelet" type="nodelet" name="voxel_grid_x" args="load pcl/VoxelGrid standalone_nodelet" respawn="true" >
-            <remap from="~input" to="/os1_cloud_node/points"/>
+            <remap from="~input" to="/H02/ouster_driver/points"/>
             <remap from="~voxel_grid/output" to="voxel_grid_x/output"/>
             <rosparam>
-                filter_field_name: x <!-- Depth -->
+                filter_field_name: x
                 filter_limit_min: -10.0
                 filter_limit_max:  10.0
                 filter_limit_negative: False
-                leaf_size: 0.1
+                leaf_size: 0.2
             </rosparam>
         </node>
 
@@ -19,11 +19,11 @@
             <remap from="~input" to="voxel_grid_x/output"/>
             <remap from="~voxel_grid/output" to="voxel_grid_y/output"/>
             <rosparam>
-                filter_field_name: y <!-- Depth -->
+                filter_field_name: y
                 filter_limit_min: -10.0
                 filter_limit_max:  10.0
                 filter_limit_negative: False
-                leaf_size: 0.1
+                leaf_size: 0.2
             </rosparam>
         </node>
 
@@ -33,11 +33,11 @@
             <remap from="~input" to="voxel_grid_y/output"/>
             <remap from="~voxel_grid/output" to="voxel_grid_z/output"/>
             <rosparam>
-                filter_field_name: y <!-- Depth -->
+                filter_field_name: z
                 filter_limit_min: -10.0
                 filter_limit_max:  10.0
                 filter_limit_negative: False
-                leaf_size: 0.1
+                leaf_size: 0.2
             </rosparam>
         </node>
 
@@ -52,11 +52,11 @@
         </node>
 
         <node pkg="nodelet" type="nodelet" name="standalone_nodelet" args="manager" output="screen" />
+
         <node pkg="nodelet" type="nodelet" name="fog_detection" args="load fog/fog_detection_nodelet standalone_nodelet" output="screen">
             <remap from="in_range_img"          to="/img_node/range_image" />
             <remap from="in_intensity_img"      to="/img_node/intensity_image" />
-            <remap from="in_pcl"                to="/assembled_cloud" />
-            <!-- <remap from="in_pcl"                to="/os1_cloud_node/points" /> -->
+            <remap from="in_pcl"                to="/voxel_grid_z/output" />
             <rosparam>
                 k_search:                 0.00
                 radius_search:            0.00
@@ -68,8 +68,8 @@
                 don_LT_threshold:         0.00
                 don_GT_threshold:         0.10
                 normal_radius:            0.15 <!--  0.05 -->  <!--  0.15 for Husky -->  <!--  0.10 for Track Bot -->
-                normal_x_LT_threshold:    0.866 <!-- -0.30 -->
-                normal_x_GT_threshold:    1.00 <!--  0.30 -->
+                normal_x_LT_threshold:    1.80 <!-- 0.866 --> <!-- -0.30 -->
+                normal_x_GT_threshold:    2.00 <!-- 1.00 --> <!--  0.30 -->
                 normal_y_LT_threshold:   -0.50 <!-- -0.30 -->
                 normal_y_GT_threshold:    0.50 <!--  0.30 -->
                 normal_z_LT_threshold:   -0.50 <!--  0.956 -->
