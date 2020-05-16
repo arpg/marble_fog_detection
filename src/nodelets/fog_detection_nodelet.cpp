@@ -310,11 +310,17 @@ namespace fog
 
         cv::Mat filtered_img(H, W, CV_32FC1, 0.0);
 
-        std::vector<float> kernel_vec = {1/sqrt(8) , 1/sqrt(5), 1/sqrt(4), 1/sqrt(5), 1/sqrt(8),
-                                         1/sqrt(5) , 1/sqrt(4), 1/sqrt(2), 1/sqrt(4), 1/sqrt(5),
-                                         1/sqrt(4) , 1/sqrt(1),         0, 1/sqrt(1), 1/sqrt(4),
-                                         1/sqrt(5) , 1/sqrt(4), 1/sqrt(2), 1/sqrt(4), 1/sqrt(5),
-                                         1/sqrt(8) , 1/sqrt(5), 1/sqrt(4), 1/sqrt(5), 1/sqrt(8)};
+        std::vector<float> kernel_vec = {1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
+                                         1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
+                                         1/sqrt(2) , 1/sqrt(2),         0, 1/sqrt(2), 1/sqrt(2),
+                                         1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
+                                         1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2)};
+
+        // std::vector<float> kernel_vec = {1/sqrt(8) , 1/sqrt(5), 1/sqrt(4), 1/sqrt(5), 1/sqrt(8),
+        //                                  1/sqrt(5) , 1/sqrt(4), 1/sqrt(2), 1/sqrt(4), 1/sqrt(5),
+        //                                  1/sqrt(4) , 1/sqrt(1),        0 , 1/sqrt(1), 1/sqrt(4),
+        //                                  1/sqrt(5) , 1/sqrt(4), 1/sqrt(2), 1/sqrt(4), 1/sqrt(5),
+        //                                  1/sqrt(8) , 1/sqrt(5), 1/sqrt(4), 1/sqrt(5), 1/sqrt(8)};
         
         std::vector<float> bool_vec;
 
@@ -347,13 +353,13 @@ namespace fog
                     {
                         if(element != 0)
                         {
-                            element = abs(element - range_img.at<float>(i,j));
+                            element = std::max(-0.01f, (element - range_img.at<float>(i,j)))/element;
                         }
                     }
 
-                    float sum = std::inner_product(std::begin(data_vec), std::end(data_vec), std::begin(kernel_vec), 0.0) / range_img.at<float>(i,j);
+                    float sum = std::inner_product(std::begin(data_vec), std::end(data_vec), std::begin(kernel_vec), 0.0);
 
-                    float cnt_nonzero = std::count_if(data_vec.begin(), data_vec.end(),[&](float const& val){ return val >= 0; });
+                    float cnt_nonzero = std::count_if(data_vec.begin(), data_vec.end(),[&](float const& val){ return val != 0; });
 
                     
                     float avgval = sum / cnt_nonzero;
@@ -390,7 +396,7 @@ namespace fog
 
         // Extract PCL Indices
         cv::Mat filter_img(H, W, CV_32FC1, 0.0);
-        cv::threshold(filtered_img, filter_img, 0.5, 1.0, THRESH_TOZERO); // dev_diff_range_img
+        cv::threshold(filtered_img, filter_img, 0.45, 1.0, THRESH_TOZERO); // dev_diff_range_img
         
         // // Try to publish half of the point cloud
         pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
