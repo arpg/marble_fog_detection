@@ -214,7 +214,6 @@ namespace fog
             cv::threshold(range_img - avg_range_img, dev_range_img, 0.0, 0.0, THRESH_TOZERO);
             cv::threshold(dev_range_img, dev_range_img, 10.0, 10.0, THRESH_TRUNC);
 
-
             // Compute difference between this frame and last frame (to remove dc content aka static gradients)
             dev_diff_range_img = abs(dev_range_img - last_dev_range_img);
 
@@ -300,10 +299,98 @@ namespace fog
 
 
         // Image Filter
+
+        // compute sum of positive matrix elements
+        // (assuming that M isa double-precision matrix)
+        double sum=0;
+        int n_above = 2;
+        int n_below = 2;
+        int n_left  = 2;
+        int n_right = 2;
+
+        cv::Mat filtered_img(H, W, CV_32FC1, 0.0);
+
+        std::vector<float> kernel_vec = {1/sqrt(8) , 1/sqrt(5), 1/sqrt(4), 1/sqrt(5), 1/sqrt(8),
+                                         1/sqrt(5) , 1/sqrt(4), 1/sqrt(2), 1/sqrt(4), 1/sqrt(5),
+                                         1/sqrt(4) , 1/sqrt(1),         0, 1/sqrt(1), 1/sqrt(4),
+                                         1/sqrt(5) , 1/sqrt(4), 1/sqrt(2), 1/sqrt(4), 1/sqrt(5),
+                                         1/sqrt(8) , 1/sqrt(5), 1/sqrt(4), 1/sqrt(5), 1/sqrt(8)};
         
+        std::vector<float> bool_vec;
+
+        for(int i = 0; i < range_img.rows; i++)
+        {
+            for(int j = 0; j < range_img.cols; j++)
+            {
+                if( (i < n_above) || (i > range_img.rows - n_below) || (j < n_left) || (j > range_img.cols - n_right || range_img.at<float>(i,j) == 0) )
+                {
+                    filtered_img.at<float>(i,j) = 0;
+                }
+                else
+                {
+                    std::vector<float> data_vec;
+                    std::vector<float> pixel_vec(25, range_img.at<float>(i,j));
+
+                    for(int m = -n_left; m <= n_right; m++)
+                    {
+                        for(int n = -n_above; n <= n_below; n++)
+                        {
+                            data_vec.push_back(range_img.at<float>(i-m,j-n));
+                        }
+                    }
+
+                    // std::cout << "data_vec: ";
+                    // for (auto i : data_vec) std::cout << i << ' ';
+                    // std::cout << '\n';
+
+                    for(auto& element : data_vec)
+                    {
+                        if(element != 0)
+                        {
+                            element = abs(element - range_img.at<float>(i,j));
+                        }
+                    }
+
+                    float sum = std::inner_product(std::begin(data_vec), std::end(data_vec), std::begin(kernel_vec), 0.0) / range_img.at<float>(i,j);
+
+                    float cnt_nonzero = std::count_if(data_vec.begin(), data_vec.end(),[&](float const& val){ return val >= 0; });
+
+                    
+                    float avgval = sum / cnt_nonzero;
+
+                    filtered_img.at<float>(i,j) = avgval;
+                    
+                    // std::cout << "data_vec: ";
+                    // for (auto i : data_vec) std::cout << i << ' ';
+                    // std::cout << '\n';
+
+                    // std::cout << "pixel_vec: ";
+                    // for (auto i : pixel_vec) std::cout << i << ' ';
+                    // std::cout << '\n';
+
+                    // std::cout << "kernel_vec: ";
+                    // for (auto i : kernel_vec) std::cout << i << ' ';
+                    // std::cout << '\n';
+
+                    // std::cout << "dot_product: " << sum;
+                    // std::cout << '\n';
+
+                    // std::cout << "cnt_nonzero: " << cnt_nonzero;
+                    // std::cout << '\n';
+
+                    // std::cout << "avgval: " << avgval;
+                    // std::cout << '\n';
+
+                    // std::cout << '\n';
+                }
+            }
+        }
+
+        // std::cout << "filtered_img: " << filtered_img << std::endl;
+
         // Extract PCL Indices
         cv::Mat filter_img(H, W, CV_32FC1, 0.0);
-        cv::threshold(dev_diff_range_img, filter_img, 0.5, 1.0, THRESH_TOZERO);
+        cv::threshold(filtered_img, filter_img, 0.5, 1.0, THRESH_TOZERO); // dev_diff_range_img
         
         // // Try to publish half of the point cloud
         pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
@@ -313,10 +400,10 @@ namespace fog
         {
             for (int v = 0; v < W; v++)
             {
-                const size_t vv = (v + px_offset[u]) % W;
-                const size_t i = vv * H + u;
                 if(filter_img.at<float>(u,v) > 0.1)
                 {
+                    const size_t vv = (v + px_offset[u]) % W;
+                    const size_t i = vv * H + u;
                     inliers->indices.push_back(i);
                 }
             }
