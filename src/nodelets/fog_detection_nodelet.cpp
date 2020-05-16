@@ -172,14 +172,22 @@ namespace fog
 
         cv::Mat zero_range_msk(H, W, CV_32FC1, 0.0);
 
+        float dist = 0;
+        float max_dist = 0;
+        float last_dist = 0;
+
         for (int u = 0; u < H; u++) {
             for (int v = 0; v < W; v++) {
                 const size_t vv = (v + px_offset[u]) % W;
                 const size_t index = vv * H + u;
                 const auto& pt = cloud_in[index];
-                range_img.at<float>(u,v) = pt.range * 5e-3;
+                range_img.at<float>(u,v) = pt.range * 1e-3; // Physical range from 0 - 100 m
+                // range_img.at<float>(u,v) = pt.range * 5e-3; // Range for 8-bit image from 0 - 255
                 noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
                 intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
+
+                dist = sqrt(pt.x * pt.x + pt.y * pt.y + pt.z * pt.z);
+                max_dist = max(dist,max_dist);
             }
         }
 
@@ -211,9 +219,10 @@ namespace fog
 
             double min = 0, max = 0;
             cv::Point minLoc(-1, -1), maxLoc(-1, -1);
-            cv::minMaxLoc(dev_range_img, &min, &max, &minLoc, &maxLoc);
+            cv::minMaxLoc(range_img, &min, &max, &minLoc, &maxLoc);
             std::cout << "min: " << min << std::endl;
             std::cout << "max: " << max << std::endl;
+            std::cout << "max_dist: " << max_dist << std::endl;
 
             // Compute difference between this frame and last frame (to remove dc content aka static gradients)
             dev_diff_range_img = abs(dev_range_img - last_dev_range_img);
@@ -292,25 +301,28 @@ namespace fog
         last_noreturn_img       = noreturn_img;
         last_prob_noreturn_img  = prob_noreturn_img;
 
-        cv::Mat index;
-        cv::threshold(range_img, index, 0, 1, THRESH_BINARY);
-        cv::Mat final = index(cv::Rect(0,0,W,H));
+        // cv::Mat index;
+        // cv::threshold(range_img, index, 2.0, 1, THRESH_TOZERO);
+        // cv::Mat final = index(cv::Rect(0,0,W,H));
 
-        std::cout << final << std::endl;
-
-        // Try to publish half of the point cloud
+        cv::Mat filter_img(H, W, CV_32FC1, 0.0);
+        cv::threshold(range_img, filter_img, 1.0, 1.0, THRESH_TOZERO);
+        
+        // // Try to publish half of the point cloud
         pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
         pcl::ExtractIndices<pcl::PointXYZ> extract;
 
         for (int u = 0; u < H; u++)
         {
-            for (int v = 0; v < W / 2; v++)
+            for (int v = 0; v < W; v++)
             {
                 const size_t vv = (v + px_offset[u]) % W;
                 const size_t i = vv * H + u;
-                // const auto& pt = cloud_in[index];
-                inliers->indices.push_back(i);
-
+                if(filter_img.at<float>(u,v) != 0.0)
+                {
+                    // const auto& pt = cloud_in[index];
+                    inliers->indices.push_back(i);
+                }
             }
         }
 
