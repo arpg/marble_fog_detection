@@ -7,10 +7,10 @@
             <remap from="~voxel_grid/output" to="voxel_grid_x/output"/>
             <rosparam>
                 filter_field_name: x
-                filter_limit_min: -10.0
-                filter_limit_max:  10.0
+                filter_limit_min: -5.0
+                filter_limit_max:  5.0
                 filter_limit_negative: False
-                leaf_size: 0.2
+                leaf_size: 0.3
             </rosparam>
         </node>
 
@@ -20,10 +20,10 @@
             <remap from="~voxel_grid/output" to="voxel_grid_y/output"/>
             <rosparam>
                 filter_field_name: y
-                filter_limit_min: -10.0
-                filter_limit_max:  10.0
+                filter_limit_min: -5.0
+                filter_limit_max:  5.0
                 filter_limit_negative: False
-                leaf_size: 0.2
+                leaf_size: 0.3
             </rosparam>
         </node>
 
@@ -34,10 +34,10 @@
             <remap from="~voxel_grid/output" to="voxel_grid_z/output"/>
             <rosparam>
                 filter_field_name: z
-                filter_limit_min: -10.0
-                filter_limit_max:  10.0
+                filter_limit_min: -5.0
+                filter_limit_max:  5.0
                 filter_limit_negative: False
-                leaf_size: 0.2
+                leaf_size: 0.3
             </rosparam>
         </node>
 
@@ -45,8 +45,8 @@
         <node pkg="nodelet" type="nodelet" name="sor" args="load pcl/StatisticalOutlierRemoval standalone_nodelet"  respawn="true">
             <remap from="~input" to="/voxel_grid_z/output"/>
             <rosparam>
-                mean_k: 50
-                stddev:  2.0
+                mean_k: 10
+                stddev:  3.0
                 negative:  True
             </rosparam>
         </node>
