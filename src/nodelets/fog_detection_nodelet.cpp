@@ -38,15 +38,16 @@ namespace fog
         sub_low_depth_pcl_ = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
 
         // Publish Point Cloud
-        pub_conf_pcl_           = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
-        pub_avg_range_img_      = private_nh.advertise<sensor_msgs::Image>("out_avg_range_img", 10);
-        pub_dev_range_img_      = private_nh.advertise<sensor_msgs::Image>("out_dev_range_img", 10);
-        pub_dev_diff_range_img_ = private_nh.advertise<sensor_msgs::Image>("out_dev_diff_range_img", 10);
-        pub_var_t_img_          = private_nh.advertise<sensor_msgs::Image>("out_var_t_img", 10);
-        pub_noreturn_img_       = private_nh.advertise<sensor_msgs::Image>("out_noreturn_img", 10);
-        pub_prob_noreturn_img_  = private_nh.advertise<sensor_msgs::Image>("prob_noreturn_img", 10);
-        pub_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
-        pub_intensity_img_      = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
+        pub_conf_pcl_               = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
+        pub_avg_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_avg_range_img", 10);
+        pub_dev_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_dev_range_img", 10);
+        pub_dev_diff_range_img_     = private_nh.advertise<sensor_msgs::Image>("out_dev_diff_range_img", 10);
+        pub_var_t_img_              = private_nh.advertise<sensor_msgs::Image>("out_var_t_img", 10);
+        pub_noreturn_img_           = private_nh.advertise<sensor_msgs::Image>("out_noreturn_img", 10);
+        pub_noreturn_lowres_img_    = private_nh.advertise<sensor_msgs::Image>("out_noreturn_lowres_img", 10);
+        pub_prob_noreturn_img_      = private_nh.advertise<sensor_msgs::Image>("prob_noreturn_img", 10);
+        pub_range_img_              = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
+        pub_intensity_img_          = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
 
         // Create static tf broadcaster (-30 pitch, Realsense pointed down)
         // rosrun tf static_transform_publisher 0.0 0.0 0.0 0.0 -0.00913852259 0.0 base_link royale_camera_optical_frame 1000
@@ -203,7 +204,7 @@ namespace fog
             cv::divide(avg_range_img, return_sum_img, avg_range_img);
 
             // Subtract range image from average range image, threshold betwneen 0 and 10
-            cv::threshold(range_img - avg_range_img, dev_range_img, thresh, thresh, THRESH_TOZERO);
+            cv::threshold(range_img - avg_range_img, dev_range_img, 0.0, 0.0, THRESH_TOZERO);
             cv::threshold(dev_range_img, dev_range_img, 10.0, 10.0, THRESH_TRUNC);
 
             double min = 0, max = 0;
@@ -220,7 +221,7 @@ namespace fog
             var_t_img = var_t_img + diff_range_img;
 
             // Compute binary no-return image (1 = no return, 0 = return)
-            cv::threshold(range_img, noreturn_img, thresh, maxval, THRESH_BINARY_INV);
+            cv::threshold(range_img, noreturn_img, 0.0, 1.0, THRESH_BINARY_INV);
             prob_noreturn_img = 0.9 * last_prob_noreturn_img;
             prob_noreturn_img = prob_noreturn_img + noreturn_img;
 

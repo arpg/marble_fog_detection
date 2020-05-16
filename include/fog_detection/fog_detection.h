@@ -104,6 +104,7 @@ namespace fog
 
       ros::Publisher pub_prob_noreturn_img_;
       ros::Publisher pub_noreturn_img_;
+      ros::Publisher pub_noreturn_lowres_img_;
       ros::Publisher pub_intensity_img_;
 
       ros::NodeHandle nh;
