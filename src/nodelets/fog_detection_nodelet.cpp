@@ -125,8 +125,10 @@ namespace fog
     void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
     {
         ouster_ros::OS1::CloudOS1 cloud_in{};
-
         pcl::fromROSMsg(*cloud_in_ros, cloud_in);
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
 
         sensor_msgs::Image range_image;
         sensor_msgs::Image noise_image;
@@ -136,8 +138,8 @@ namespace fog
         int W = cloud_in_ros->width;
         int H = cloud_in_ros->height;
         std::vector<int>  px_offset = ouster::OS1::get_px_offset(W);
-        // for 64 channels, should be [ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
-        //                              0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
+        // for 64 channels, the px_offset =[ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
+        //                                   0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
 
         // Setup Noise Image
         noise_image.width = W;
@@ -221,7 +223,7 @@ namespace fog
             var_t_img = var_t_img + diff_range_img;
 
             // Compute binary no-return image (1 = no return, 0 = return)
-            cv::threshold(range_img, noreturn_img, 0.0, 1.0, THRESH_BINARY_INV);
+            cv::threshold(range_img, noreturn_img, 0.2, 1.0, THRESH_BINARY_INV);
             prob_noreturn_img = 0.9 * last_prob_noreturn_img;
             prob_noreturn_img = prob_noreturn_img + noreturn_img;
 
@@ -289,6 +291,44 @@ namespace fog
         last_var_t_img          = var_t_img;
         last_noreturn_img       = noreturn_img;
         last_prob_noreturn_img  = prob_noreturn_img;
+
+        cv::Mat index;
+        cv::threshold(range_img, index, 0, 1, THRESH_BINARY);
+        cv::Mat final = index(cv::Rect(0,0,W,H));
+
+        std::cout << final << std::endl;
+
+        // Try to publish half of the point cloud
+        pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
+        pcl::ExtractIndices<pcl::PointXYZ> extract;
+
+        for (int u = 0; u < H; u++)
+        {
+            for (int v = 0; v < W / 2; v++)
+            {
+                const size_t vv = (v + px_offset[u]) % W;
+                const size_t i = vv * H + u;
+                // const auto& pt = cloud_in[index];
+                inliers->indices.push_back(i);
+
+            }
+        }
+
+        extract.setInputCloud(cloud_in2);
+        extract.setIndices(inliers);
+        extract.setNegative(true);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr output(new pcl::PointCloud<pcl::PointXYZ>);
+        extract.filter(*output);
+        
+        output->width = output->points.size ();
+        output->height = 1;
+        output->is_dense = true;
+
+        seq++;
+        output->header.seq = seq;
+        output->header.frame_id = cloud_in2->header.frame_id;
+        pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
+        pub_conf_pcl_.publish (output);
 
     };
 
