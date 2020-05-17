@@ -163,6 +163,7 @@ namespace fog
         cv::Mat diff_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat var_s_raw_img(H, W, CV_32FC1, 0.0);
         cv::Mat dev_range_img(H, W, CV_32FC1, 0.0);
+        cv::Mat dev_range_bin_img(H, W, CV_32FC1, 0.0);
         cv::Mat dev_diff_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat var_t_img(H, W, CV_32FC1, 0.0);
         cv::Mat return_img(H, W, CV_32FC1, 0.0);
@@ -202,17 +203,22 @@ namespace fog
             // cv::blur(range_img, mean_s_img, cv::Size(9,9)); //Or whatever blurring you want
 
             // Average range image
-            cv::boxFilter(range_img, avg_range_img, -1, cv::Size(9,9), cv::Point(-1,-1), false); // do not normalize here
+            cv::boxFilter(range_img, avg_range_img, -1, cv::Size(5,5), cv::Point(-1,-1), false); // do not normalize here
 
             // Average binarized range image (return image)
-            cv::boxFilter(return_img, return_sum_img, -1, cv::Size(9,9), cv::Point(-1,-1), false); // do not normalize here
+            cv::boxFilter(return_img, return_sum_img, -1, cv::Size(5,5), cv::Point(-1,-1), false); // do not normalize here
 
             // Scale average range image
             cv::divide(avg_range_img, return_sum_img, avg_range_img); // normalize here
 
             // Subtract range image from average range image, threshold betwneen 0 and 10
-            cv::threshold(range_img - avg_range_img, dev_range_img, 0.0, 0.0, THRESH_TOZERO);
+            cv::threshold(avg_range_img - range_img, dev_range_img, 0.0, 0.0, THRESH_TOZERO);
             cv::threshold(dev_range_img, dev_range_img, 10.0, 10.0, THRESH_TRUNC);
+
+            // Subtract range image from average range image, binarize as pre-filter
+            cv::threshold(avg_range_img - range_img, dev_range_bin_img, 0.10, 1.0, THRESH_BINARY);
+
+            std::cout << "cv::countNonZero(dev_range_img)" << cv::countNonZero(dev_range_bin_img) << std::endl;
 
             // Compute difference between this frame and last frame (to remove dc content aka static gradients)
             dev_diff_range_img = abs(dev_range_img - last_dev_range_img);
@@ -328,7 +334,7 @@ namespace fog
         {
             for(int j = 0; j < range_img.cols; j++)
             {
-                if( (i < n_above) || (i > range_img.rows - n_below) || (j < n_left) || (j > range_img.cols - n_right || range_img.at<float>(i,j) == 0) )
+                if( (i < n_above) || (i > range_img.rows - n_below) || (j < n_left) || (j > range_img.cols - n_right || range_img.at<float>(i,j) == 0) || dev_range_bin_img.at<float>(i,j) == 0 )
                 {
                     filtered_img.at<float>(i,j) = 0;
                 }
@@ -396,7 +402,7 @@ namespace fog
 
         // Extract PCL Indices
         cv::Mat filter_img(H, W, CV_32FC1, 0.0);
-        cv::threshold(filtered_img, filter_img, 0.45, 1.0, THRESH_TOZERO); // dev_diff_range_img
+        cv::threshold(filtered_img, filter_img, 0.50, 1.0, THRESH_TOZERO); // dev_diff_range_img
         
         // // Try to publish half of the point cloud
         pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
