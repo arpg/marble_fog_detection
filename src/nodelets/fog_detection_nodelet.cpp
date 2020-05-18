@@ -34,12 +34,15 @@ namespace fog
         sub_range_img_ = nh.subscribe("in_range_img", 1, &FogDetectionNodelet::range_image_cb, this);
         sub_intensity_img_ = nh.subscribe("in_intensity_img", 1, &FogDetectionNodelet::intensity_image_cb, this);
 
-        // sub_low_depth_pcl_ = nh.subscribe("in_pcl", 1, &FogDetectionNodelet::point_cloud_cb, this);
+        // sub_low_depth_pcl_ = nh.subscribe("in_pcl", 1,  &FogDetectionNodelet::point_cloud_cb, this);
         sub_low_depth_pcl_ = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
 
         // Publish Point Cloud
         pub_conf_pcl_               = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
         pub_avg_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_avg_range_img", 10);
+        pub_diff_range_img_         = private_nh.advertise<sensor_msgs::Image>("out_diff_range_img", 10);
+        pub_var_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_var_range_img", 10);
+        pub_sum_noreturn_img_       = private_nh.advertise<sensor_msgs::Image>("out_sum_noreturn_img", 10);
         pub_dev_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_dev_range_img", 10);
         pub_dev_diff_range_img_     = private_nh.advertise<sensor_msgs::Image>("out_dev_diff_range_img", 10);
         pub_var_t_img_              = private_nh.advertise<sensor_msgs::Image>("out_var_t_img", 10);
@@ -124,6 +127,30 @@ namespace fog
 
     void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
     {
+
+        // // Note roll and pitch are intentionally backwards due to the image frame to boldy frame transform_pcl. The IMU transform_pcl converts from body to world frame.
+        // tf::Transform transform_pcl;
+        // transform_pcl.setRotation(tf::createQuaternionFromRPY(transform_pcl_roll_, transform_pcl_pitch_, transform_pcl_yaw_));
+        // pcl_ros::transformPointCloud(*cloud_in_filtered, *cloud_in_transformed, transform_pcl);
+
+        // tf::TransformListener listener;
+        // tf::StampedTransform T_map_os1lidar;
+        // double roll, pitch, yaw;
+        
+        // try
+        // {
+        //     listener.waitForTransform("/os1_lidar", "/map", ros::Time::now(), ros::Duration(0.05) );
+        //     listener.lookupTransform("/os1_lidar", "/map", ros::Time(0), T_map_os1lidar);
+        //     tf::Matrix3x3 m(T_map_os1lidar.getRotation());
+        //     int solution_number = 1;
+        //     m.getEulerYPR(yaw, pitch, roll, solution_number);
+        // }
+        // catch (tf::TransformException ex)
+        // {
+        //     ROS_WARN("%s",ex.what()); 
+        //     // ros::Duration(0.1).sleep();
+        // }
+        
         ouster_ros::OS1::CloudOS1 cloud_in{};
         pcl::fromROSMsg(*cloud_in_ros, cloud_in);
 
@@ -159,9 +186,14 @@ namespace fog
         cv::Mat max_range_img(H, W, CV_32FC1, 20.0);
         cv::Mat nonzero_range_img(H, W, CV_32FC1, 0.1);
         cv::Mat range_img(H, W, CV_32FC1, 0.0);
+        cv::Mat sq_range_img(H, W, CV_32FC1, 0.0);
+        cv::Mat sq_of_sum_range_img(H, W, CV_32FC1, 0.0);
+        cv::Mat zeroreturn_img(H, W, CV_32FC1, 0.0);
+        cv::Mat acc_noreturn_msk(H, W, CV_32FC1, 0.0);
         cv::Mat avg_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat diff_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat var_s_raw_img(H, W, CV_32FC1, 0.0);
+        cv::Mat var_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat dev_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat dev_range_bin_img(H, W, CV_32FC1, 0.0);
         cv::Mat dev_diff_range_img(H, W, CV_32FC1, 0.0);
@@ -191,12 +223,53 @@ namespace fog
 
         if(last_range_img.rows == 0 && last_range_img.cols == 0)
         {
+            sum_range_img               = zero_range_msk.clone();
+            sum_of_sq_range_img         = zero_range_msk.clone();
+            acc_noreturn_img            = zero_range_msk.clone();
+            sum_range_img               = cv::Scalar::all(0.0);
+            sum_of_sq_range_img         = cv::Scalar::all(0.0);
+            acc_noreturn_img            = cv::Scalar::all(0.0);
         }
         else
         {
-            // Difference of range images
-            diff_range_img = abs(range_img - last_range_img);
+            // Reset Sums
+            if(((seq - 1) % 3) == 0)
+            {
+                sum_range_img           = cv::Scalar::all(0.0);
+                sum_of_sq_range_img     = cv::Scalar::all(0.0);
+                acc_noreturn_img        = cv::Scalar::all(0.0);
+            }
             
+            // Compute sum of no return
+            cv::threshold(range_img, zeroreturn_img, 0.2, 1.0, THRESH_BINARY_INV);
+
+            acc_noreturn_img = acc_noreturn_img + zeroreturn_img;
+            
+            std::cout << "acc_noreturn_img: " << acc_noreturn_img << std::endl;
+
+            // Compute sum of range
+            sum_range_img = sum_range_img + range_img;
+
+            // Compute sum of squares
+            cv::multiply(range_img, range_img, sq_range_img);
+            sum_of_sq_range_img = sum_of_sq_range_img + sq_range_img;
+
+            // Compute sample standard deviation
+            if((seq % 3) == 0)
+            {
+                float N = 3;
+                cv::multiply(sum_range_img, sum_range_img, sq_of_sum_range_img);
+                var_range_img = 1/(N-1) * sum_of_sq_range_img - 1/(N*N-N) * sq_of_sum_range_img;
+
+                cv::threshold(zeroreturn_img, acc_noreturn_msk, 0.2, 1.0, THRESH_BINARY_INV);
+                // https://stackoverflow.com/questions/6656769/computing-standard-deviation-over-a-circular-buffer
+
+                cv::multiply(var_range_img, acc_noreturn_msk, var_range_img);
+
+            }
+
+
+
             // Binarize depth (range) image
             cv::threshold(range_img, return_img, 0.0, 1.0, THRESH_BINARY);
 
@@ -218,7 +291,7 @@ namespace fog
             // Subtract range image from average range image, binarize as pre-filter
             cv::threshold(avg_range_img - range_img, dev_range_bin_img, 0.10, 1.0, THRESH_BINARY);
 
-            std::cout << "cv::countNonZero(dev_range_img)" << cv::countNonZero(dev_range_bin_img) << std::endl;
+            std::cout << "cv::countNonZero(dev_range_img): " << cv::countNonZero(dev_range_bin_img) << std::endl;
 
             // Compute difference between this frame and last frame (to remove dc content aka static gradients)
             dev_diff_range_img = abs(dev_range_img - last_dev_range_img);
@@ -239,6 +312,12 @@ namespace fog
             std::cout << "max: " << max << std::endl;
 
             // https://stackoverflow.com/questions/18233691/how-to-index-and-modify-an-opencv-matrix
+
+
+
+
+
+
         }
 
         // Publish Range Image
@@ -256,6 +335,30 @@ namespace fog
         avg_range_msg.header.stamp               = ros::Time::now();
         avg_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
         pub_avg_range_img_.publish(avg_range_msg.toImageMsg());
+
+        // Publish Diff Range Image
+        cv_bridge::CvImage diff_range_msg;
+        diff_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+        diff_range_msg.image                      = diff_range_img;
+        diff_range_msg.header.stamp               = ros::Time::now();
+        diff_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+        pub_diff_range_img_.publish(diff_range_msg.toImageMsg());
+
+        // Publish Variance of Range Image
+        cv_bridge::CvImage var_range_msg;
+        var_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+        var_range_msg.image                      = var_range_img;
+        var_range_msg.header.stamp               = ros::Time::now();
+        var_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+        pub_var_range_img_.publish(var_range_msg.toImageMsg());
+
+        // Publish Variance of Range Image
+        cv_bridge::CvImage sum_noreturn_msg;
+        sum_noreturn_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+        sum_noreturn_msg.image                      = acc_noreturn_img;
+        sum_noreturn_msg.header.stamp               = ros::Time::now();
+        sum_noreturn_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+        pub_sum_noreturn_img_.publish(sum_noreturn_msg.toImageMsg());
 
         // Publish Range Deviation Image
         cv_bridge::CvImage dev_range_msg;
@@ -292,7 +395,7 @@ namespace fog
         // Publish No Return Prob Image
         cv_bridge::CvImage prob_noreturn_msg;
         prob_noreturn_msg.encoding          = sensor_msgs::image_encodings::TYPE_32FC1;
-        prob_noreturn_msg.image             = prob_noreturn_img;
+        prob_noreturn_msg.image             = acc_noreturn_img;
         prob_noreturn_msg.header.stamp      = ros::Time::now();
         prob_noreturn_msg.header.frame_id   = cloud_in_ros->header.frame_id;        
         pub_prob_noreturn_img_.publish(prob_noreturn_msg.toImageMsg());

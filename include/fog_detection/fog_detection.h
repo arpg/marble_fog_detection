@@ -96,6 +96,7 @@ namespace fog
 
       ros::Publisher pub_range_img_;
       ros::Publisher pub_avg_range_img_;
+      ros::Publisher pub_diff_range_img_;
       ros::Publisher pub_dev_range_img_;
       ros::Publisher pub_dev_diff_range_img_;
 
@@ -106,6 +107,9 @@ namespace fog
       ros::Publisher pub_noreturn_img_;
       ros::Publisher pub_noreturn_lowres_img_;
       ros::Publisher pub_intensity_img_;
+
+      ros::Publisher pub_var_range_img_;
+      ros::Publisher pub_sum_noreturn_img_;
 
       ros::NodeHandle nh;
       ros::NodeHandle private_nh;
@@ -198,6 +202,10 @@ namespace fog
       cv::Mat last_dev_range_img;
       cv::Mat last_noreturn_img;
       cv::Mat last_prob_noreturn_img;
+      cv::Mat sum_range_img;
+      cv::Mat sum_of_sq_range_img;
+      cv::Mat acc_noreturn_img;
+      cv::Mat acc2_noreturn_img;
       
 
       pcl::search::Search<pcl::PointXYZ>::Ptr tree_xyz;
