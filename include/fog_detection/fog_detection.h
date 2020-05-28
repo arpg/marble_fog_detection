@@ -71,6 +71,9 @@
 #include <ouster_ros/OS1ConfigSrv.h>
 #include <ouster_ros/os1_ros.h>
 
+#include <iostream>
+#include <fstream>
+
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
 typedef PointCloud::Ptr ptr_cloud;

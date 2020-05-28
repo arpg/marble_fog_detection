@@ -1,0 +1,29 @@
+<launch>
+
+  <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="imu2imurot" args="0 0 0 3.14159 0 0 body_aligned_imu_link body_aligned_imu_nk_rotated"/>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="ouster2body" args="0 0 0 3.14159 0 0 os1_sensor os1_lidar"/> -->
+
+  <arg name="rviz_dir" default="/home/erush91/catkin_ws/src/fog_detection/rviz/" />
+  <arg name="rviz_file" default="H01_urban.rviz" />
+
+  <arg name="bag_dir" default="/media/erush91/4D28ADA963CE7750/SATSOP/URBAN_DEPLOYMENT_2_BETA/URBAN_DEPLOYMENT_2_BETA_H01/" />
+  <arg name="bag_file1" default="outputs_2020-02-22-12-30-23_0-002.bag" />
+  <arg name="bag_file2" default="outputs_2020-02-22-12-50-23_1-003.bag" />
+  <arg name="bag_file3" default="outputs_2020-02-22-13-10-24_2-001.bag" />
+  <arg name="bag_file4" default="sensor_data_2020-02-22-12-30-23_0.bag" />
+  <arg name="bag_file5" default="sensor_data_2020-02-22-12-50-24_1.bag" />
+  <arg name="bag_file6" default="sensor_data_2020-02-22-13-10-24_2.bag" />
+
+  <arg name="start_time" default="0" />
+  <arg name="rate" default="0.25" />
+
+  <rosparam>
+    use_system_time: True
+  </rosparam>
+
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(arg rviz_dir)$(arg rviz_file)" />
+  <node pkg="rosbag" type="play" name="player" args="--clock --pause -s $(arg start_time) -r $(arg rate)
+            $(arg bag_dir)$(arg bag_file1) $(arg bag_dir)$(arg bag_file2) $(arg bag_dir)$(arg bag_file3) 
+            $(arg bag_dir)$(arg bag_file4) $(arg bag_dir)$(arg bag_file5) $(arg bag_dir)$(arg bag_file6)" output="screen" />
+
+</launch>
