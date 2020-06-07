@@ -257,7 +257,7 @@ namespace fog
             std::string target_frame_id = "body_aligned_imu_link";
             
             // Wait for up to one second for the first transforms to become avaiable. 
-            echoListener.waitForTransform(source_frame_id, target_frame_id, ros::Time(), ros::Duration(0.01));
+            echoListener.waitForTransform(source_frame_id, target_frame_id, ros::Time(), ros::Duration(1.0));
             
             // up camera tf listener
             try
