@@ -202,6 +202,8 @@ if __name__ == "__main__":
   parser.add_argument('-t','--threshold', type=float, default=5.0, help='minimium summed intensity for voxel to be labeled as keep')
   parser.add_argument('--t_before', type=float, default=2.0, help='range of time in which past scans are considered')
   parser.add_argument('--t_after', type=float, default=0.0, help='range of time in which future scans are considered')
+
+  parser.add_argument('-v','--visualizer', action='store_true', help='include -v to show visualizer')
   args = parser.parse_args()
 
   bag_name_list = []
@@ -220,7 +222,12 @@ if __name__ == "__main__":
                         args.odom_topic, 
                         args.lidar_topic,
                         lidar_tf=T_rl)
-    loader.display_scans()
+
+    if(args.visualizer):
+      print("display scans")
+      loader.display_scans()
+
+    print("count grid")
     count_grid = CountGrid(args.voxel_len, loader)
 
     print("labeling points")

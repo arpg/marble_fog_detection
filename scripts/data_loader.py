@@ -12,6 +12,8 @@ from matplotlib import animation
 from tqdm import tqdm
 import random
 
+import rospy
+
 class RadarPoint:
   def __init__(self, point, intensity, doppler, distance):
     self.point = point
@@ -125,7 +127,7 @@ class DataLoader:
                                   iterations, 
                                   interval=100,
                                   blit=False,
-                                  repeat=True)
+                                  repeat=False)
 
     plt.show()
 
@@ -318,34 +320,36 @@ class DataLoader:
     if self.lidar_topic is not None:
       msgs['lidar'] = []
 
-    bag_msgs = bag.read_messages(topics=[self.radar_topic, 
+    start_time_s      = bag.get_start_time()
+    end_time_s        = bag.get_end_time()
+    duration_s        = end_time_s - start_time_s
+    ros_start_time_s  = rospy.Time.from_sec(start_time_s)
+    ros_end_time_s  = rospy.Time.from_sec(start_time_s + 1)
+    # ros_end_time_s    = rospy.Time.from_sec(end_time_s)
+    ros_duration_s    = ros_end_time_s - ros_start_time_s
+
+
+    size_gb           = float(bag.size)/1028/1028/1028
+    sec_per_gb        = duration_s / size_gb
+
+    print 'start time [s]   : %f' % start_time_s
+    print 'end time   [s]   : %f' % end_time_s
+    print 'duration   [s]   : %f' % duration_s
+    print 'size       [GB]  : %f' % size_gb
+    print 'data rate  [s/GB]: %f' % sec_per_gb
+
+    
+    bag_msgs = bag.read_messages( topics=[self.radar_topic, 
                                          self.odom_topic, 
-                                         self.lidar_topic])
+                                         self.lidar_topic],
+                                  start_time=ros_start_time_s,
+                                  end_time=ros_end_time_s
+                                )
     
     # python data_labeler.py -d /home/erush91/data/radar/ -b fog_garage_artifacts_0.txt -r /mmWaveDataHdl/RScan -l /os1_cloud_node/points -o /camera/odom/sample -s test1234321
-
-    # For some reason, running this loop allows "msg_list = [(topic, msg, t) for (topic, msg, t) in bag_msgs]" to execute without running out of memory
-
-    start = 1
-    for (topic, msg, t) in bag_msgs:
-      
-      # Get the start time
-      if(start == 1):
-        t_start = t
-        t_end = t + 60*1e9
-        print(t_start)
-      start = 0
-
-      if (t >= t_start and t < t_end):
-        print(t)
-
-
-
-      # print(topic, msg, t)
-   
-    print("YO!")
+    # http://docs.ros.org/melodic/api/rosbag/html/python/rosbag.bag.Bag-class.html
+       
     msg_list = [(topic, msg, t) for (topic, msg, t) in bag_msgs]
-    print("BOO!")
 
     for (topic, msg, t) in tqdm(msg_list):
       if topic == self.radar_topic:
