@@ -39,7 +39,16 @@ class AttentionDataset(Dataset):
     pos = torch.from_numpy(point_cloud[:, :3]).float()
     x = torch.from_numpy(point_cloud[:, 3:6]).float()
     y = torch.from_numpy(point_cloud[:, 6]).long()
-    data = Data(pos=pos, x=x, y=y, category=y)
+
+    print(pos)
+    print(x)
+    print(y)
+
+    # data = Data(pos=pos, x=x, y=y, category=y)
+    data = {'pos': torch.from_numpy(point_cloud[:, :3]).float(),
+            'x'  : torch.from_numpy(point_cloud[:, 3:6]).float(),
+            'y'  : torch.from_numpy(point_cloud[:, 6]).long()}
+
     data = data if self.pre_transform is None else self.pre_transform(data)
     self.data_list.append(data)
 
@@ -88,16 +97,16 @@ class AttentionDataset(Dataset):
 
     sum_nodes = 0
     for point_cloud in self.data_list:
-      sum_nodes += point_cloud.pos.shape[0]
+      sum_nodes += point_cloud['pos'].shape[0]
 
     arr = np.zeros([sum_nodes, 8])
     pcl_idx = 0
     i = 0
     for point_cloud in self.data_list:
-      n_points = point_cloud.pos.shape[0]
-      arr[i:i+n_points, :3] = point_cloud.pos.numpy()
-      arr[i:i+n_points, 3:6] = point_cloud.x.numpy()
-      arr[i:i+n_points, 6] = point_cloud.y.numpy()
+      n_points = point_cloud['pos'].shape[0]
+      arr[i:i+n_points, :3] = point_cloud['pos'].numpy()
+      arr[i:i+n_points, 3:6] = point_cloud['x'].numpy()
+      arr[i:i+n_points, 6] = point_cloud['y'].numpy()
       arr[i:i+n_points, -1] = pcl_idx
       i += n_points
       pcl_idx += 1

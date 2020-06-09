@@ -1,13 +1,35 @@
 import argparse
 import torch
 from pointnet_denoise import PointNet
-import torch_geometric.transforms as T
+# import torch_geometric.transforms as T
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from attention_dataset import AttentionDataset
 import numpy as np
 from tqdm import tqdm
 
+
+def add_item(degrees, axis):
+  if isinstance(degrees, numbers.Number):
+      degrees = (-abs(degrees), abs(degrees))
+  assert isinstance(degrees, (tuple, list)) and len(degrees) == 2
+  self.degrees = degrees
+  self.axis = axis
+
+  degree = math.pi * random.uniform(*self.degrees) / 180.0
+  sin, cos = math.sin(degree), math.cos(degree)
+
+  if data['pos'].size(-1) == 2:
+      matrix = [[cos, sin], [-sin, cos]]
+  else:
+      if self.axis == 0:
+          matrix = [[1, 0, 0], [0, cos, sin], [0, -sin, cos]]
+      elif self.axis == 1:
+          matrix = [[cos, 0, -sin], [0, 1, 0], [sin, 0, cos]]
+      else:
+          matrix = [[cos, sin, 0], [-sin, cos, 0], [0, 0, 1]]
+  return LinearTransformation(torch.tensor(matrix))(data)
+  
 def feature_transform_regularizer(trans):
   d = trans.size()[1]
   batch_size = trans.size()[0]
@@ -29,10 +51,10 @@ def get_acc_ignore_padding(pred, target, is_padding):
 
 # collate data list into batch
 def collate(data_list):
-  pos_list = [data.pos.transpose(0,1) for data in data_list]
-  x_list = [data.x.transpose(0,1) for data in data_list]
-  y_list = [data.y for data in data_list]
-  padding = [[False]*data.y.size()[0] for data in data_list]
+  pos_list = [data['pos'].transpose(0,1) for data in data_list]
+  x_list = [data['x'].transpose(0,1) for data in data_list]
+  y_list = [data['y'] for data in data_list]
+  padding = [[False]*data['y'].size()[0] for data in data_list]
 
   # find max number of points in batch
   num_points = max([pos.shape[1] for pos in pos_list])
@@ -59,6 +81,7 @@ def collate(data_list):
   return {'pos':pos,'x':x,'y':y,'padding':padding}
 
 
+# python train.py -f files_for_training.txt -s test1234321_weights
 
 parser = argparse.ArgumentParser(description='get datafile name')
 parser.add_argument('-f','--filenames', type=str, help='text file with filenames from which to load training and test data')
@@ -70,16 +93,17 @@ dataset_file = open(args.filenames)
 for file in dataset_file:
   file_list.append(file.strip())
 
-transform = T.Compose([
-  T.RandomRotate(45, axis=0),
-  T.RandomRotate(45, axis=1),
-  T.RandomRotate(45, axis=2)
-])
-pre_transform = T.NormalizeScale()
+# transform = T.Compose([
+#   T.RandomRotate(45, axis=0),
+#   T.RandomRotate(45, axis=1),
+#   T.RandomRotate(45, axis=2)
+# ])
+
+# pre_transform = T.NormalizeScale()
 
 dataset = AttentionDataset(path=None,
-                           transform=transform,
-                           pre_transform=pre_transform)
+                           transform=None,
+                           pre_transform=None)
 
 for file in file_list:
   dataset.load_data(file)

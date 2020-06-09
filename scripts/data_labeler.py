@@ -134,7 +134,7 @@ def animate_pointclouds(loader):
                                 fargs=(loader,ax),
                                 interval=100,
                                 blit=False,
-                                repeat=True)
+                                repeat=False)
 
   plt.show()
 
@@ -233,10 +233,13 @@ if __name__ == "__main__":
     print("labeling points")
     t_range = [-args.t_before, args.t_after]
     label_points(count_grid, t_range, args.threshold)
+
     print("adding to torch dataset")
     add_to_torch_dataset(loader, torch_dataset)
 
-    animate_pointclouds(loader)
+    if(args.visualizer):
+      print("animating pointclouds")
+      animate_pointclouds(loader)
 
     del loader
     del count_grid

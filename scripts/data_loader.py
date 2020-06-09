@@ -324,7 +324,7 @@ class DataLoader:
     end_time_s        = bag.get_end_time()
     duration_s        = end_time_s - start_time_s
     ros_start_time_s  = rospy.Time.from_sec(start_time_s)
-    ros_end_time_s  = rospy.Time.from_sec(start_time_s + 1)
+    ros_end_time_s  = rospy.Time.from_sec(start_time_s + 100)
     # ros_end_time_s    = rospy.Time.from_sec(end_time_s)
     ros_duration_s    = ros_end_time_s - ros_start_time_s
 
