@@ -51,6 +51,7 @@ namespace fog
         pub_prob_noreturn_img_      = private_nh.advertise<sensor_msgs::Image>("prob_noreturn_img", 10);
         pub_range_img_              = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
         pub_intensity_img_          = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
+        pub_log_intensity_img_      = private_nh.advertise<sensor_msgs::Image>("out_log_intensity_img", 10);
 
         // Create static tf broadcaster (-30 pitch, Realsense pointed down)
         // rosrun tf static_transform_publisher 0.0 0.0 0.0 0.0 -0.00913852259 0.0 base_link royale_camera_optical_frame 1000
@@ -199,6 +200,8 @@ namespace fog
             cv::Mat max_range_img(H, W, CV_32FC1, 20.0);
             cv::Mat nonzero_range_img(H, W, CV_32FC1, 0.1);
             cv::Mat range_img(H, W, CV_32FC1, 0.0);
+            cv::Mat intensity_img(H, W, CV_32FC1, 0.0);
+            cv::Mat log_intensity_img(H, W, CV_32FC1, 0.0);
             cv::Mat sq_range_img(H, W, CV_32FC1, 0.0);
             cv::Mat sq_of_sum_range_img(H, W, CV_32FC1, 0.0);
             cv::Mat zeroreturn_img(H, W, CV_32FC1, 0.0);
@@ -231,8 +234,11 @@ namespace fog
                     // range_img.at<float>(u,v) = pt.range * 5e-3; // Range for 8-bit image from 0 - 255
                     noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
                     intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
+                    intensity_img.at<float>(u,v) = pt.intensity + 1.0f;
                 }
             }
+
+            cv::log(intensity_img, log_intensity_img);
 
             std::string pcl_filename = "pcl_" + std::to_string(seq) + ".csv";
 
@@ -242,145 +248,145 @@ namespace fog
             pcl_file.close();            
 
 
-            tf::TransformListener up_listener;
-            tf::StampedTransform up_transform;
-            tf::Matrix3x3 echo_m_euler;
-            tf::Matrix3x3 up_m_inv_euler;
-            double up_camera_roll;
-            double up_camera_pitch;
-            double up_camera_yaw;
+            // tf::TransformListener up_listener;
+            // tf::StampedTransform up_transform;
+            // tf::Matrix3x3 echo_m_euler;
+            // tf::Matrix3x3 up_m_inv_euler;
+            // double up_camera_roll;
+            // double up_camera_pitch;
+            // double up_camera_yaw;
 
-            //Instantiate a local listener
-            tf::TransformListener echoListener;
+            // //Instantiate a local listener
+            // tf::TransformListener echoListener;
                         
-            std::string source_frame_id = "map";
-            std::string target_frame_id = "body_aligned_imu_link";
+            // std::string source_frame_id = "map";
+            // std::string target_frame_id = "body_aligned_imu_link";
             
-            // Wait for up to one second for the first transforms to become avaiable. 
-            echoListener.waitForTransform(source_frame_id, target_frame_id, ros::Time(), ros::Duration(1.0));
+            // // Wait for up to one second for the first transforms to become avaiable. 
+            // echoListener.waitForTransform(source_frame_id, target_frame_id, ros::Time(), ros::Duration(1.0));
             
-            // up camera tf listener
-            try
-            {
-                // up_listener.waitForTransform("map", "os1_lidar", ros::Time(0), ros::Duration(10.0) );
-                // up_listener.lookupTransform(source_frame_id, target_frame_id, ros::Time(0), up_transform);
-                // up_m_euler.setRotation(up_transform.getRotation());
-                // int up_solution_number = 1;
-                // up_m_euler.getEulerYPR(up_camera_yaw, up_camera_pitch, up_camera_roll, up_solution_number);
-
-                tf::StampedTransform echo_transform;
-                echoListener.lookupTransform(source_frame_id, target_frame_id, ros::Time(), echo_transform);
-
-                // Get RPY
-                double yaw, pitch, roll;
-                echo_transform.getBasis().getRPY(roll, pitch, yaw);
-
-                // Get rotation
-                tf::Quaternion q = echo_transform.getRotation();
-                echo_m_euler.setRotation(q);
-
-                // Get translation
-                tf::Vector3 v = echo_transform.getOrigin();
-
-                // Assign elements of rotation matrix
-                
-                float m11 = echo_m_euler.getColumn(0).getX();
-                float m21 = echo_m_euler.getColumn(0).getY();
-                float m31 = echo_m_euler.getColumn(0).getZ();
-                float m41 = 0;
-
-                float m12 = echo_m_euler.getColumn(1).getX();
-                float m22 = echo_m_euler.getColumn(1).getY();
-                float m32 = echo_m_euler.getColumn(1).getZ();
-                float m42 = 0;
-
-                float m13 = echo_m_euler.getColumn(2).getX();
-                float m23 = echo_m_euler.getColumn(2).getY();
-                float m33 = echo_m_euler.getColumn(2).getZ();
-                float m43 = 0;
-
-                float m14 = echo_transform.getOrigin().getX();
-                float m24 = echo_transform.getOrigin().getY();
-                float m34 = echo_transform.getOrigin().getZ();
-                float m44 = 1;
-
-                std::cout << "---------------------------------------------------" << std::endl;
-                std::cout << "---------------------------------------------------" << std::endl;
-                std::cout << "---------------------------------------------------" << std::endl;
-                std::cout << "SEQUENCE NUMBER: " << seq                            << std::endl;
-                std::cout << "---------------------------------------------------" << std::endl;
-                // Print translation
-                std::cout << "Translation:                [ " << v.getX() << ", " << v.getY() << ", " << v.getZ() << " ]" << std::endl;
-                std::cout   << "Rotation: in Quaternion   [ " << q.getX() << ", " << q.getY() << ", " << q.getZ() << ", " << q.getW() << " ]" << std::endl
-                            << "          in RPY (radian) [ " <<  roll << ", " << pitch << ", " << yaw << " ]" << std::endl
-                            << "          in RPY (degree) [ " <<  roll*180.0/M_PI << ", " << pitch*180.0/M_PI << ", " << yaw*180.0/M_PI << " ]" << std::endl;
-                std::cout   << "Transformation Matrix R1  [ " << m11 << ", " << m12 << ", " << m13 << ", " << m14 << " ]" << std::endl;
-                std::cout   << "Transformation Matrix R2  [ " << m21 << ", " << m22 << ", " << m23 << ", " << m24 << " ]" << std::endl;
-                std::cout   << "Transformation Matrix R3  [ " << m31 << ", " << m32 << ", " << m33 << ", " << m34 << " ]" << std::endl;
-                std::cout   << "Transformation Matrix R4  [ " << m41 << ", " << m42 << ", " << m43 << ", " << m44 << " ]" << std::endl;
-
-                // Export tf to csv file
-                std::string tf_filename = "tf_" + std::to_string(seq) + ".csv";
-
-                std::ofstream tf_file;
-                tf_file.open (tf_filename.c_str());
-                tf_file << m11 << "," << m12 << "," << m13 << "," << m14 << "\n";
-                tf_file << m21 << "," << m22 << "," << m23 << "," << m24 << "\n";
-                tf_file << m31 << "," << m32 << "," << m33 << "," << m34 << "\n";
-                tf_file << m41 << "," << m42 << "," << m43 << "," << m44 << "\n";
-                tf_file.close();
-            
-
-            }
-            catch (tf::TransformException ex)
-            {
-                ROS_WARN("%s",ex.what());
-            }
-
-            // if(last_range_img.rows == 0 && last_range_img.cols == 0)
+            // // up camera tf listener
+            // try
             // {
-            //     sum_range_img               = zero_range_msk.clone();
-            //     sum_of_sq_range_img         = zero_range_msk.clone();
-            //     acc_noreturn_img            = zero_range_msk.clone();
-            //     sum_range_img               = cv::Scalar::all(0.0);
-            //     sum_of_sq_range_img         = cv::Scalar::all(0.0);
-            //     acc_noreturn_img            = cv::Scalar::all(0.0);
+            //     // up_listener.waitForTransform("map", "os1_lidar", ros::Time(0), ros::Duration(10.0) );
+            //     // up_listener.lookupTransform(source_frame_id, target_frame_id, ros::Time(0), up_transform);
+            //     // up_m_euler.setRotation(up_transform.getRotation());
+            //     // int up_solution_number = 1;
+            //     // up_m_euler.getEulerYPR(up_camera_yaw, up_camera_pitch, up_camera_roll, up_solution_number);
+
+            //     tf::StampedTransform echo_transform;
+            //     echoListener.lookupTransform(source_frame_id, target_frame_id, ros::Time(), echo_transform);
+
+            //     // Get RPY
+            //     double yaw, pitch, roll;
+            //     echo_transform.getBasis().getRPY(roll, pitch, yaw);
+
+            //     // Get rotation
+            //     tf::Quaternion q = echo_transform.getRotation();
+            //     echo_m_euler.setRotation(q);
+
+            //     // Get translation
+            //     tf::Vector3 v = echo_transform.getOrigin();
+
+            //     // Assign elements of rotation matrix
+                
+            //     float m11 = echo_m_euler.getColumn(0).getX();
+            //     float m21 = echo_m_euler.getColumn(0).getY();
+            //     float m31 = echo_m_euler.getColumn(0).getZ();
+            //     float m41 = 0;
+
+            //     float m12 = echo_m_euler.getColumn(1).getX();
+            //     float m22 = echo_m_euler.getColumn(1).getY();
+            //     float m32 = echo_m_euler.getColumn(1).getZ();
+            //     float m42 = 0;
+
+            //     float m13 = echo_m_euler.getColumn(2).getX();
+            //     float m23 = echo_m_euler.getColumn(2).getY();
+            //     float m33 = echo_m_euler.getColumn(2).getZ();
+            //     float m43 = 0;
+
+            //     float m14 = echo_transform.getOrigin().getX();
+            //     float m24 = echo_transform.getOrigin().getY();
+            //     float m34 = echo_transform.getOrigin().getZ();
+            //     float m44 = 1;
+
+            //     std::cout << "---------------------------------------------------" << std::endl;
+            //     std::cout << "---------------------------------------------------" << std::endl;
+            //     std::cout << "---------------------------------------------------" << std::endl;
+            //     std::cout << "SEQUENCE NUMBER: " << seq                            << std::endl;
+            //     std::cout << "---------------------------------------------------" << std::endl;
+            //     // Print translation
+            //     std::cout << "Translation:                [ " << v.getX() << ", " << v.getY() << ", " << v.getZ() << " ]" << std::endl;
+            //     std::cout   << "Rotation: in Quaternion   [ " << q.getX() << ", " << q.getY() << ", " << q.getZ() << ", " << q.getW() << " ]" << std::endl
+            //                 << "          in RPY (radian) [ " <<  roll << ", " << pitch << ", " << yaw << " ]" << std::endl
+            //                 << "          in RPY (degree) [ " <<  roll*180.0/M_PI << ", " << pitch*180.0/M_PI << ", " << yaw*180.0/M_PI << " ]" << std::endl;
+            //     std::cout   << "Transformation Matrix R1  [ " << m11 << ", " << m12 << ", " << m13 << ", " << m14 << " ]" << std::endl;
+            //     std::cout   << "Transformation Matrix R2  [ " << m21 << ", " << m22 << ", " << m23 << ", " << m24 << " ]" << std::endl;
+            //     std::cout   << "Transformation Matrix R3  [ " << m31 << ", " << m32 << ", " << m33 << ", " << m34 << " ]" << std::endl;
+            //     std::cout   << "Transformation Matrix R4  [ " << m41 << ", " << m42 << ", " << m43 << ", " << m44 << " ]" << std::endl;
+
+            //     // Export tf to csv file
+            //     std::string tf_filename = "tf_" + std::to_string(seq) + ".csv";
+
+            //     std::ofstream tf_file;
+            //     tf_file.open (tf_filename.c_str());
+            //     tf_file << m11 << "," << m12 << "," << m13 << "," << m14 << "\n";
+            //     tf_file << m21 << "," << m22 << "," << m23 << "," << m24 << "\n";
+            //     tf_file << m31 << "," << m32 << "," << m33 << "," << m34 << "\n";
+            //     tf_file << m41 << "," << m42 << "," << m43 << "," << m44 << "\n";
+            //     tf_file.close();
+            
+
             // }
-            // else
+            // catch (tf::TransformException ex)
             // {
-            //     // Reset Sums
-            //     if(((seq - 1) % 3) == 0)
-            //     {
-            //         sum_range_img           = cv::Scalar::all(0.0);
-            //         sum_of_sq_range_img     = cv::Scalar::all(0.0);
-            //         acc_noreturn_img        = cv::Scalar::all(0.0);
-            //     }
+            //     ROS_WARN("%s",ex.what());
+            // }
+
+            if(last_range_img.rows == 0 && last_range_img.cols == 0)
+            {
+                sum_range_img               = zero_range_msk.clone();
+                sum_of_sq_range_img         = zero_range_msk.clone();
+                acc_noreturn_img            = zero_range_msk.clone();
+                sum_range_img               = cv::Scalar::all(0.0);
+                sum_of_sq_range_img         = cv::Scalar::all(0.0);
+                acc_noreturn_img            = cv::Scalar::all(0.0);
+            }
+            else
+            {
+                // Reset Sums
+                if(((seq - 1) % 3) == 0)
+                {
+                    sum_range_img           = cv::Scalar::all(0.0);
+                    sum_of_sq_range_img     = cv::Scalar::all(0.0);
+                    acc_noreturn_img        = cv::Scalar::all(0.0);
+                }
                 
-            //     // Compute sum of no return
-            //     cv::threshold(range_img, zeroreturn_img, 0.2, 1.0, THRESH_BINARY_INV);
+                // Compute sum of no return
+                cv::threshold(range_img, zeroreturn_img, 0.2, 1.0, THRESH_BINARY_INV);
 
-            //     acc_noreturn_img = acc_noreturn_img + zeroreturn_img;
+                acc_noreturn_img = acc_noreturn_img + zeroreturn_img;
                 
-            //     // Compute sum of range
-            //     sum_range_img = sum_range_img + range_img;
+                // Compute sum of range
+                sum_range_img = sum_range_img + intensity_img;
 
-            //     // Compute sum of squares
-            //     cv::multiply(range_img, range_img, sq_range_img);
-            //     sum_of_sq_range_img = sum_of_sq_range_img + sq_range_img;
+                // Compute sum of squares
+                cv::multiply(intensity_img, intensity_img, sq_range_img);
+                sum_of_sq_range_img = sum_of_sq_range_img + sq_range_img;
 
-            //     // Compute sample standard deviation
-            //     if((seq % 3) == 0)
-            //     {
-            //         float N = 3;
-            //         cv::multiply(sum_range_img, sum_range_img, sq_of_sum_range_img);
-            //         var_range_img = 1/(N-1) * sum_of_sq_range_img - 1/(N*N-N) * sq_of_sum_range_img;
+                // Compute sample standard deviation
+                if((seq % 3) == 0)
+                {
+                    float N = 3;
+                    cv::multiply(sum_range_img, sum_range_img, sq_of_sum_range_img);
+                    var_range_img = 1/(N-1)/2 * sum_of_sq_range_img - 1/(N*N-N) * sq_of_sum_range_img;
 
-            //         cv::threshold(zeroreturn_img, acc_noreturn_msk, 0.2, 1.0, THRESH_BINARY_INV);
-            //         // https://stackoverflow.com/questions/6656769/computing-standard-deviation-over-a-circular-buffer
+                    cv::threshold(zeroreturn_img, acc_noreturn_msk, 0.2, 1.0, THRESH_BINARY_INV);
+                    // https://stackoverflow.com/questions/6656769/computing-standard-deviation-over-a-circular-buffer
 
-            //         cv::multiply(var_range_img, acc_noreturn_msk, var_range_img);
+                    // cv::multiply(var_range_img, acc_noreturn_msk, var_range_img);
 
-            //     }
+                }
 
             //     // Binarize depth (range) image
             //     cv::threshold(range_img, return_img, 0.0, 1.0, THRESH_BINARY);
@@ -425,7 +431,9 @@ namespace fog
 
             //     // https://stackoverflow.com/questions/18233691/how-to-index-and-modify-an-opencv-matrix
 
-            // }
+            }
+
+            // std::cout << range_img << std::endl;
 
             // Publish Range Image
             cv_bridge::CvImage new_range_msg;
@@ -434,6 +442,23 @@ namespace fog
             new_range_msg.header.stamp              = ros::Time::now();
             new_range_msg.header.frame_id           = cloud_in_ros->header.frame_id;        
             pub_range_img_.publish(new_range_msg.toImageMsg());
+
+
+            // Publish Intensity Image
+            cv_bridge::CvImage intensity_msg;
+            intensity_msg.encoding              = sensor_msgs::image_encodings::TYPE_32FC1;
+            intensity_msg.image                 = intensity_img;
+            intensity_msg.header.stamp          = ros::Time::now();
+            intensity_msg.header.frame_id       = cloud_in_ros->header.frame_id;        
+            pub_intensity_img_.publish(intensity_msg.toImageMsg());
+
+            // Publish Log Intensity Image
+            cv_bridge::CvImage log_intensity_msg;
+            log_intensity_msg.encoding              = sensor_msgs::image_encodings::TYPE_32FC1;
+            log_intensity_msg.image                 = log_intensity_img;
+            log_intensity_msg.header.stamp          = ros::Time::now();
+            log_intensity_msg.header.frame_id       = cloud_in_ros->header.frame_id;        
+            pub_log_intensity_img_.publish(log_intensity_msg.toImageMsg());
 
         //     // Publish Range Avg Image
         //     cv_bridge::CvImage avg_range_msg;
@@ -451,13 +476,13 @@ namespace fog
         //     diff_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
         //     pub_diff_range_img_.publish(diff_range_msg.toImageMsg());
 
-        //     // Publish Variance of Range Image
-        //     cv_bridge::CvImage var_range_msg;
-        //     var_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        //     var_range_msg.image                      = var_range_img;
-        //     var_range_msg.header.stamp               = ros::Time::now();
-        //     var_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        //     pub_var_range_img_.publish(var_range_msg.toImageMsg());
+            // Publish Variance of Range Image
+            cv_bridge::CvImage var_range_msg;
+            var_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+            var_range_msg.image                      = var_range_img;
+            var_range_msg.header.stamp               = ros::Time::now();
+            var_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+            pub_var_range_img_.publish(var_range_msg.toImageMsg());
 
         //     // Publish Variance of Range Image
         //     cv_bridge::CvImage sum_noreturn_msg;
@@ -507,7 +532,7 @@ namespace fog
         //     prob_noreturn_msg.header.frame_id   = cloud_in_ros->header.frame_id;        
         //     pub_prob_noreturn_img_.publish(prob_noreturn_msg.toImageMsg());
 
-        //     last_range_img          = range_img;
+            last_range_img          = range_img;
         //     last_dev_range_img      = dev_range_img;
         //     last_var_t_img          = var_t_img;
         //     last_noreturn_img       = noreturn_img;
@@ -607,8 +632,6 @@ namespace fog
         //             }
         //         }
         //     }
-
-        //     // std::cout << "filtered_img: " << filtered_img << std::endl;
 
         //     // Extract PCL Indices
         //     cv::Mat filter_img(H, W, CV_32FC1, 0.0);

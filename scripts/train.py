@@ -81,7 +81,7 @@ def collate(data_list):
   return {'pos':pos,'x':x,'y':y,'padding':padding}
 
 
-# python train.py -f files_for_training.txt -s test1234321_weights
+# python train.py -f files_for_training.txt -s test1234321_weights.npy
 
 parser = argparse.ArgumentParser(description='get datafile name')
 parser.add_argument('-f','--filenames', type=str, help='text file with filenames from which to load training and test data')
@@ -92,6 +92,9 @@ file_list = []
 dataset_file = open(args.filenames)
 for file in dataset_file:
   file_list.append(file.strip())
+
+# https://pytorch-geometric.readthedocs.io/en/latest/_modules/torch_geometric/transforms/random_rotate.html#RandomRotate
+# https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.transform.Rotation.html
 
 # transform = T.Compose([
 #   T.RandomRotate(45, axis=0),

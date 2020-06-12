@@ -1,0 +1,24 @@
+<launch>
+
+  <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="imu2imurot" args="0 0 0 3.14159 0 0 body_aligned_imu_link body_aligned_imu_nk_rotated"/>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="ouster2body" args="0 0 0 3.14159 0 0 os1_sensor os1_lidar"/> -->
+
+  <arg name="rviz_dir" default="/home/erush91/catkin_ws/src/fog_detection/rviz/" />
+  <arg name="rviz_file" default="fog_garage.rviz" />
+
+  <arg name="bag_dir" default="/home/erush91/data/radar/" />
+  <arg name="bag_file1" default="fog_garage_artifacts_0.bag" />
+  <arg name="start_time" default="0" />
+  <arg name="rate" default="1.0" />
+
+  <rosparam>
+    use_system_time: True
+  </rosparam>
+
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(arg rviz_dir)$(arg rviz_file)" />
+  <node pkg="rosbag" type="play" name="player" args="--clock --pause -s $(arg start_time) -r $(arg rate)
+            $(arg bag_dir)$(arg bag_file1)" output="screen" />
+
+  <include file="$(find fog_detection)/launch/fog_detection.launch" />
+
+</launch>

@@ -110,6 +110,7 @@ namespace fog
       ros::Publisher pub_noreturn_img_;
       ros::Publisher pub_noreturn_lowres_img_;
       ros::Publisher pub_intensity_img_;
+      ros::Publisher pub_log_intensity_img_;
 
       ros::Publisher pub_var_range_img_;
       ros::Publisher pub_sum_noreturn_img_;

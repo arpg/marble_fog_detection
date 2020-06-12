@@ -10,6 +10,8 @@ from attention_dataset import AttentionDataset
 from data_loader import DataLoader, RadarPoint
 from count_grid import CountGrid
 
+import rosbag
+import rospy
 
 def get_keep_and_discard_sets(scan):
   keep_points = np.array([])
@@ -187,7 +189,27 @@ def add_to_torch_dataset(loader, dataset):
 
     dataset.add_item(cloud_arr)
 
+def split_bag(bag_filename):
+  bag = rosbag.Bag(bag_filename)
 
+  start_time_s      = bag.get_start_time()
+  end_time_s        = bag.get_end_time()
+  duration_s        = end_time_s - start_time_s
+  ros_start_time_s  = rospy.Time.from_sec(start_time_s)
+  ros_end_time_s    = rospy.Time.from_sec(start_time_s + 10)
+  # ros_end_time_s    = rospy.Time.from_sec(end_time_s)
+  ros_duration_s    = ros_end_time_s - ros_start_time_s
+
+  size_gb           = float(bag.size)/1028/1028/1028
+  sec_per_gb        = duration_s / size_gb
+
+  print 'start time [s]   : %f' % start_time_s
+  print 'end time   [s]   : %f' % end_time_s
+  print 'duration   [s]   : %f' % duration_s
+  print 'size       [GB]  : %f' % size_gb
+  print 'data rate  [s/GB]: %f' % sec_per_gb
+  
+  return ros_start_time_s, ros_end_time_s
 
 if __name__ == "__main__":
 
@@ -217,28 +239,33 @@ if __name__ == "__main__":
 
   torch_dataset = AttentionDataset()
   for bag_filename in bag_name_list:
+
+    ros_start_time_s, ros_end_time_s = split_bag(bag_filename)
+
     loader = DataLoader(bag_filename, 
                         args.radar_topic, 
                         args.odom_topic, 
                         args.lidar_topic,
-                        lidar_tf=T_rl)
+                        lidar_tf=T_rl,
+                        ros_start_time_s=ros_start_time_s,
+                        ros_end_time_s=ros_end_time_s)
 
     if(args.visualizer):
-      print("display scans")
+      print("Starting to display scans ...")
       loader.display_scans()
 
-    print("count grid")
+    print("Starting to count grid ...")
     count_grid = CountGrid(args.voxel_len, loader)
 
-    print("labeling points")
+    print("Starting to label points ...")
     t_range = [-args.t_before, args.t_after]
     label_points(count_grid, t_range, args.threshold)
 
-    print("adding to torch dataset")
+    print("Starting to add to torch dataset ...")
     add_to_torch_dataset(loader, torch_dataset)
 
     if(args.visualizer):
-      print("animating pointclouds")
+      print("Starting to animate pointclouds ...")
       animate_pointclouds(loader)
 
     del loader

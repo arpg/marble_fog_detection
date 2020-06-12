@@ -24,9 +24,10 @@ class RadarPoint:
 
 class DataLoader:
 
-  def __init__(self, bag_filename, radar_topic, 
-               odom_topic=None, lidar_topic=None, 
-               radar_tf=np.eye(4), lidar_tf=np.eye(4)):
+  def __init__( self, bag_filename, radar_topic, 
+                odom_topic=None, lidar_topic=None, 
+                radar_tf=np.eye(4), lidar_tf=np.eye(4),
+                ros_start_time_s=None, ros_end_time_s=None):
     self.radar_topic = radar_topic
     self.odom_topic = odom_topic
     self.lidar_topic = lidar_topic
@@ -313,21 +314,13 @@ class DataLoader:
     
     bag = rosbag.Bag(bag_filename)
 
-    # iterate through bag file, storing relevant topics
-    msgs = {'radar':[]}
-    if self.odom_topic is not None:
-      msgs['odom'] = []
-    if self.lidar_topic is not None:
-      msgs['lidar'] = []
-
     start_time_s      = bag.get_start_time()
     end_time_s        = bag.get_end_time()
     duration_s        = end_time_s - start_time_s
     ros_start_time_s  = rospy.Time.from_sec(start_time_s)
-    ros_end_time_s  = rospy.Time.from_sec(start_time_s + 100)
+    ros_end_time_s    = rospy.Time.from_sec(start_time_s + 10)
     # ros_end_time_s    = rospy.Time.from_sec(end_time_s)
     ros_duration_s    = ros_end_time_s - ros_start_time_s
-
 
     size_gb           = float(bag.size)/1028/1028/1028
     sec_per_gb        = duration_s / size_gb
@@ -338,6 +331,12 @@ class DataLoader:
     print 'size       [GB]  : %f' % size_gb
     print 'data rate  [s/GB]: %f' % sec_per_gb
 
+    # iterate through bag file, storing relevant topics
+    msgs = {'radar':[]}
+    if self.odom_topic is not None:
+      msgs['odom'] = []
+    if self.lidar_topic is not None:
+      msgs['lidar'] = []
     
     bag_msgs = bag.read_messages( topics=[self.radar_topic, 
                                          self.odom_topic, 
