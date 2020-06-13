@@ -74,6 +74,15 @@
 #include <iostream>
 #include <fstream>
 
+
+#include <pcl/common/eigen.h>
+#include <pcl/console/print.h>
+
+#include <array>
+#include <algorithm>
+#include <cmath>
+
+
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
 typedef PointCloud::Ptr ptr_cloud;
@@ -117,6 +126,7 @@ namespace fog
       ros::Publisher pub_intensity_filter_img_;
       ros::Publisher pub_intensity_filter_pcl_;
       ros::Publisher pub_normal_pcl_;
+      ros::Publisher pub_test_pcl_;
 
       ros::NodeHandle nh;
       ros::NodeHandle private_nh;

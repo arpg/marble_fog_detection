@@ -54,6 +54,7 @@ namespace fog
         pub_intensity_filter_img_   = private_nh.advertise<sensor_msgs::Image>("out_intensity_filter_img", 10);
         pub_intensity_filter_pcl_   = private_nh.advertise<PointCloud>("out_intensity_filter_pcl", 10);
         pub_normal_pcl_             = private_nh.advertise<PointCloud>("out_normal_pcl", 10);
+        pub_test_pcl_               = private_nh.advertise<PointCloud>("out_test_pcl", 10);
 
         // Create static tf broadcaster (-30 pitch, Realsense pointed down)
         // rosrun tf static_transform_publisher 0.0 0.0 0.0 0.0 -0.00913852259 0.0 base_link royale_camera_optical_frame 1000
@@ -144,6 +145,9 @@ namespace fog
 
         if(range_pcl == 1)
         {
+
+            seq++;
+
             ouster_ros::OS1::CloudOS1 cloud_in{};
             pcl::fromROSMsg(*cloud_in_ros, cloud_in);
 
@@ -175,6 +179,7 @@ namespace fog
             intensity_image.encoding = "mono8";
             intensity_image.data.resize(W * H);
 
+            cv::Mat img(H, W, CV_32FC(10), 0.0);
             cv::Mat img_x(H, W, CV_32FC1, 0.1);
             cv::Mat img_y(H, W, CV_32FC1, 0.1);
             cv::Mat img_z(H, W, CV_32FC1, 0.1);
@@ -224,29 +229,22 @@ namespace fog
                     noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
                     intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
                     intensity_img.at<float>(u,v) = pt.intensity + 1.0f;
+
+                    img_x.at<float>(u,v) = pt.x;
+                    img_y.at<float>(u,v) = pt.y;
+                    img_z.at<float>(u,v) = pt.z;
+                    img_d.at<float>(u,v) = pt.range * 1e-3;
+                    img_i.at<float>(u,v) = pt.intensity;
+                    img_r.at<float>(u,v) = pt.reflectivity;
+                    img_n.at<float>(u,v) = pt.noise;
                 }
             }
 
+            ////////////////////////////
+            // INTENSITY FILTER (PCL) //
+            ////////////////////////////
+
             cv::threshold(intensity_img, intensity_filter_img, 100.0, 1.0, THRESH_BINARY_INV);
-
-            // std::cout << intensity_filter_img << std::endl;
-
-            // Plane fitting
-            // int window_sz = 3;
-            // int ofst = (window_sz - 1) / 2;
-
-            // for (int u = 0 + ofst; u < H - ofst; u++) {
-            //     for (int v = 0 + ofst; v < W - ofst; v++) {
-            //         const size_t vv = (v + px_offset[u]) % W;
-            //         const size_t index = vv * H + u;
-            //         const auto& pt = cloud_in[index];
-            //         range_img.at<float>(u,v) = pt.range * 1e-3; // Physical range from 0 - 100 m (converting from mm --> m)
-            //         // range_img.at<float>(u,v) = pt.range * 5e-3; // Range for 8-bit image from 0 - 255
-            //         noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
-            //         intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
-            //         intensity_img.at<float>(u,v) = pt.intensity + 1.0f;
-            //     }
-            // }
 
             // Intensity Filter
             pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
@@ -271,8 +269,6 @@ namespace fog
             pcl::PointCloud<pcl::PointXYZI>::Ptr output(new pcl::PointCloud<pcl::PointXYZI>);
             extract.filter(*output);
 
-            seq++;
-      
             output->width = output->points.size ();
             output->height = 1;
             output->is_dense = true;
@@ -280,6 +276,52 @@ namespace fog
             output->header.frame_id = cloud_in2->header.frame_id;
             pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
             pub_intensity_filter_pcl_.publish (output);
+            
+            /////////////////////////
+            // CALCULATE PCA (IMG) //
+            /////////////////////////
+
+            // int window_sz = 3;
+            // int ofst = (window_sz - 1) / 2;
+
+            // for (int u = 0 + ofst; u < H - ofst; u++) {
+            //     for (int v = 0 + ofst; v < W - ofst; v++) {
+            //         const size_t vv = (v + px_offset[u]) % W;
+            //         const size_t index = vv * H + u;
+            //         const auto& pt = cloud_in[index];
+            //     }
+            // }
+
+            // Test Filter
+            pcl::PointIndices::Ptr test_pcl(new pcl::PointIndices());
+            pcl::ExtractIndices<pcl::PointXYZI> test_extract;
+
+            for (int u = 0; u < H; u++)
+            {
+                for (int v = 0; v < W; v++)
+                {
+                    if(img_x.at<float>(u,v) > 0.0)
+                    {
+                        const size_t vv = (v + px_offset[u]) % W;
+                        const size_t i = vv * H + u;
+                        test_pcl->indices.push_back(i);
+                    }
+                }
+            }
+
+            test_extract.setInputCloud(cloud_in2);
+            test_extract.setIndices(test_pcl);
+            test_extract.setNegative(false);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr test_output(new pcl::PointCloud<pcl::PointXYZI>);
+            test_extract.filter(*test_output);
+      
+            test_output->width = test_output->points.size ();
+            test_output->height = 1;
+            test_output->is_dense = true;
+            test_output->header.seq = seq;
+            test_output->header.frame_id = cloud_in2->header.frame_id;
+            pcl_conversions::toPCL(ros::Time::now(), test_output->header.stamp);
+            pub_test_pcl_.publish (test_output);
 
             // Publish Range Image
             cv_bridge::CvImage new_range_msg;
@@ -433,6 +475,197 @@ namespace fog
         last_intensity_img = new_intensity_img;
 
     };
+    
+    namespace detail
+    {
+        template <typename Vector, typename Scalar>
+        struct EigenVector 
+        {
+            Vector vector;
+            Scalar length;
+        };  // struct EigenVector
+        
+        /**
+         * @brief returns the unit vector along the largest eigen value as well as the
+         *        length of the largest eigenvector
+         * @tparam Vector Requested result type, needs to be explicitly provided and has
+         *                to be implicitly constructible from ConstRowExpr
+         * @tparam Matrix deduced input type providing similar in API as Eigen::Matrix
+         */
+        template <typename Vector, typename Matrix> static EigenVector<Vector, typename Matrix::Scalar>
+        getLargest3x3Eigenvector (const Matrix scaledMatrix)
+        {
+            using Scalar = typename Matrix::Scalar;
+            using Index = typename Matrix::Index;
+            
+            Matrix crossProduct;
+            crossProduct << scaledMatrix.row (0).cross (scaledMatrix.row (1)),
+                            scaledMatrix.row (0).cross (scaledMatrix.row (2)),
+                            scaledMatrix.row (1).cross (scaledMatrix.row (2));
+            
+            // expression template, no evaluation here
+            const auto len = crossProduct.rowwise ().norm ();
+            
+            Index index;
+            const Scalar length = len.maxCoeff (&index);  // <- first evaluation
+            return EigenVector<Vector, Scalar> {crossProduct.row (index) / length,
+                                                length};
+        }
+    }
+        
+    template <typename Matrix, typename Vector> inline void
+    eigen33 (const Matrix& mat, typename Matrix::Scalar& eigenvalue, Vector& eigenvector)
+    {
+        using Scalar = typename Matrix::Scalar;
+        // Scale the matrix so its entries are in [-1,1].  The scaling is applied
+        // only when at least one matrix entry has magnitude larger than 1.
+        
+        Scalar scale = mat.cwiseAbs ().maxCoeff ();
+        if (scale <= std::numeric_limits < Scalar > ::min ())
+            scale = Scalar (1.0);
+        
+        Matrix scaledMat = mat / scale;
+        
+        Vector eigenvalues;
+        computeRoots (scaledMat, eigenvalues);
+        
+        eigenvalue = eigenvalues (0) * scale;
+        
+        scaledMat.diagonal ().array () -= eigenvalues (0);
+        
+        eigenvector = detail::getLargest3x3Eigenvector<Vector> (scaledMat).vector;
+    }
+    
+    template <typename PointT, typename Scalar> inline unsigned int
+    computeMeanAndCovarianceMatrix (const pcl::PointCloud<PointT> &cloud,
+                                    Eigen::Matrix<Scalar, 3, 3> &covariance_matrix,
+                                    Eigen::Matrix<Scalar, 4, 1> &centroid)
+    {
+    // create the buffer on the stack which is much faster than using cloud[indices[i]] and centroid as a buffer
+    Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor> accu = Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor>::Zero ();
+    std::size_t point_count;
+    if (cloud.is_dense)
+    {
+        point_count = cloud.size ();
+        // For each point in the cloud
+        for (const auto& point: cloud)
+        {
+        accu [0] += point.x * point.x;
+        accu [1] += point.x * point.y;
+        accu [2] += point.x * point.z;
+        accu [3] += point.y * point.y; // 4
+        accu [4] += point.y * point.z; // 5
+        accu [5] += point.z * point.z; // 8
+        accu [6] += point.x;
+        accu [7] += point.y;
+        accu [8] += point.z;
+        }
+    }
+    else
+    {
+        point_count = 0;
+        for (const auto& point: cloud)
+        {
+        if (!isFinite (point))
+            continue;
+    
+        accu [0] += point.x * point.x;
+        accu [1] += point.x * point.y;
+        accu [2] += point.x * point.z;
+        accu [3] += point.y * point.y;
+        accu [4] += point.y * point.z;
+        accu [5] += point.z * point.z;
+        accu [6] += point.x;
+        accu [7] += point.y;
+        accu [8] += point.z;
+        ++point_count;
+        }
+    }
+    accu /= static_cast<Scalar> (point_count);
+    if (point_count != 0)
+    {
+        //centroid.head<3> () = accu.tail<3> ();    -- does not compile with Clang 3.0
+        centroid[0] = accu[6]; centroid[1] = accu[7]; centroid[2] = accu[8];
+        centroid[3] = 1;
+        covariance_matrix.coeffRef (0) = accu [0] - accu [6] * accu [6];
+        covariance_matrix.coeffRef (1) = accu [1] - accu [6] * accu [7];
+        covariance_matrix.coeffRef (2) = accu [2] - accu [6] * accu [8];
+        covariance_matrix.coeffRef (4) = accu [3] - accu [7] * accu [7];
+        covariance_matrix.coeffRef (5) = accu [4] - accu [7] * accu [8];
+        covariance_matrix.coeffRef (8) = accu [5] - accu [8] * accu [8];
+        covariance_matrix.coeffRef (3) = covariance_matrix.coeff (1);
+        covariance_matrix.coeffRef (6) = covariance_matrix.coeff (2);
+        covariance_matrix.coeffRef (7) = covariance_matrix.coeff (5);
+    }
+    return (static_cast<unsigned int> (point_count));
+    }
+    
+    inline void
+    solvePlaneParameters (const Eigen::Matrix3f &covariance_matrix,
+                        float &nx, float &ny, float &nz, float &curvature)
+    {
+    // Avoid getting hung on Eigen's optimizers
+    //  for (int i = 0; i < 9; ++i)
+    //    if (!std::isfinite (covariance_matrix.coeff (i)))
+    //    {
+    //      //PCL_WARN ("[pcl::solvePlaneParameteres] Covariance matrix has NaN/Inf values!\n");
+    //      nx = ny = nz = curvature = std::numeric_limits<float>::quiet_NaN ();
+    //      return;
+    //    }
+    // Extract the smallest eigenvalue and its eigenvector
+    EIGEN_ALIGN16 Eigen::Vector3f::Scalar eigen_value;
+    EIGEN_ALIGN16 Eigen::Vector3f eigen_vector;
+    pcl::eigen33 (covariance_matrix, eigen_value, eigen_vector);
+    
+    nx = eigen_vector [0];
+    ny = eigen_vector [1];
+    nz = eigen_vector [2];
+    
+    // Compute the curvature surface change
+    float eig_sum = covariance_matrix.coeff (0) + covariance_matrix.coeff (4) + covariance_matrix.coeff (8);
+    if (eig_sum != 0)
+        curvature = std::abs (eigen_value / eig_sum);
+    else
+        curvature = 0;
+    }
+  
+    template <typename PointInT, typename PointOutT>
+
+    /** \brief Compute the Least-Squares plane fit for a given set of points, using their indices,
+     * and return the estimated plane parameters together with the surface curvature.
+     * \param cloud the input point cloud
+     * \param indices the point cloud indices that need to be used
+     * \param nx the resultant X component of the plane normal
+     * \param ny the resultant Y component of the plane normal
+     * \param nz the resultant Z component of the plane normal
+     * \param curvature the estimated surface curvature as a measure of
+     * \f[
+     * \lambda_0 / (\lambda_0 + \lambda_1 + \lambda_2)
+     * \f]
+     */
+    inline bool
+    computePointNormal (const pcl::PointCloud<PointInT> &cloud, const std::vector<int> &indices,
+                        float &nx, float &ny, float &nz, float &curvature)
+    {
+
+        // Placeholder for the 3x3 covariance matrix at each surface patch
+        EIGEN_ALIGN16 Eigen::Matrix3f covariance_matrix_;
+
+       /** \brief 16-bytes aligned placeholder for the XYZ centroid of a surface patch. */
+       Eigen::Vector4f xyz_centroid_;
+               
+        if (indices.size () < 3 ||
+            computeMeanAndCovarianceMatrix (cloud, indices, covariance_matrix_, xyz_centroid_) == 0)
+        {
+        nx = ny = nz = curvature = std::numeric_limits<float>::quiet_NaN ();
+        return false;
+        }
+
+        // Get the plane normal and surface curvature
+        solvePlaneParameters (covariance_matrix_, nx, ny, nz, curvature);
+        return true;
+    }
+
 
 }
 
