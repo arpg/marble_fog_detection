@@ -38,7 +38,6 @@ namespace fog
         sub_low_depth_pcl_ = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
 
         // Publish Point Cloud
-        pub_conf_pcl_               = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
         pub_avg_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_avg_range_img", 10);
         pub_diff_range_img_         = private_nh.advertise<sensor_msgs::Image>("out_diff_range_img", 10);
         pub_var_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_var_range_img", 10);
@@ -52,6 +51,9 @@ namespace fog
         pub_range_img_              = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
         pub_intensity_img_          = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
         pub_log_intensity_img_      = private_nh.advertise<sensor_msgs::Image>("out_log_intensity_img", 10);
+        pub_intensity_filter_img_   = private_nh.advertise<sensor_msgs::Image>("out_intensity_filter_img", 10);
+        pub_intensity_filter_pcl_   = private_nh.advertise<PointCloud>("out_intensity_filter_pcl", 10);
+        pub_normal_pcl_             = private_nh.advertise<PointCloud>("out_normal_pcl", 10);
 
         // Create static tf broadcaster (-30 pitch, Realsense pointed down)
         // rosrun tf static_transform_publisher 0.0 0.0 0.0 0.0 -0.00913852259 0.0 base_link royale_camera_optical_frame 1000
@@ -128,29 +130,6 @@ namespace fog
 
     void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
     {
-
-        // // Note roll and pitch are intentionally backwards due to the image frame to boldy frame transform_pcl. The IMU transform_pcl converts from body to world frame.
-        // tf::Transform transform_pcl;
-        // transform_pcl.setRotation(tf::createQuaternionFromRPY(transform_pcl_roll_, transform_pcl_pitch_, transform_pcl_yaw_));
-        // pcl_ros::transformPointCloud(*cloud_in_filtered, *cloud_in_transformed, transform_pcl);
-
-        // tf::TransformListener listener;
-        // tf::StampedTransform T_map_os1lidar;
-        // double roll, pitch, yaw;
-        
-        // try
-        // {
-        //     listener.waitForTransform("/os1_lidar", "/map", ros::Time::now(), ros::Duration(0.05) );
-        //     listener.lookupTransform("/os1_lidar", "/map", ros::Time(0), T_map_os1lidar);
-        //     tf::Matrix3x3 m(T_map_os1lidar.getRotation());
-        //     int solution_number = 1;
-        //     m.getEulerYPR(yaw, pitch, roll, solution_number);
-        // }
-        // catch (tf::TransformException ex)
-        // {
-        //     ROS_WARN("%s",ex.what()); 
-        //     // ros::Duration(0.1).sleep();
-        // }
         
         bool range_pcl = 0;
 
@@ -168,7 +147,7 @@ namespace fog
             ouster_ros::OS1::CloudOS1 cloud_in{};
             pcl::fromROSMsg(*cloud_in_ros, cloud_in);
 
-            pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZ>);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
             
             sensor_msgs::Image range_image;
@@ -196,6 +175,14 @@ namespace fog
             intensity_image.encoding = "mono8";
             intensity_image.data.resize(W * H);
 
+            cv::Mat img_x(H, W, CV_32FC1, 0.1);
+            cv::Mat img_y(H, W, CV_32FC1, 0.1);
+            cv::Mat img_z(H, W, CV_32FC1, 0.1);
+            cv::Mat img_d(H, W, CV_32FC1, 0.1);
+            cv::Mat img_i(H, W, CV_32FC1, 0.1);
+            cv::Mat img_r(H, W, CV_32FC1, 0.1);
+            cv::Mat img_n(H, W, CV_32FC1, 0.1);
+
             cv::Mat zero_range_img(H, W, CV_32FC1, 0.1);
             cv::Mat max_range_img(H, W, CV_32FC1, 20.0);
             cv::Mat nonzero_range_img(H, W, CV_32FC1, 0.1);
@@ -221,6 +208,8 @@ namespace fog
 
             cv::Mat zero_range_msk(H, W, CV_32FC1, 0.0);
 
+            cv::Mat intensity_filter_img(H, W, CV_32FC1, 0.0);
+
             float dist = 0;
             float max_dist = 0;
             float last_dist = 0;
@@ -238,202 +227,59 @@ namespace fog
                 }
             }
 
-            cv::log(intensity_img, log_intensity_img);
+            cv::threshold(intensity_img, intensity_filter_img, 100.0, 1.0, THRESH_BINARY_INV);
 
-            std::string pcl_filename = "pcl_" + std::to_string(seq) + ".csv";
+            // std::cout << intensity_filter_img << std::endl;
 
-            std::ofstream pcl_file;
-            pcl_file.open(pcl_filename.c_str());
-            pcl_file << cv::format(range_img, cv::Formatter::FMT_CSV) << std::endl;
-            pcl_file.close();            
+            // Plane fitting
+            // int window_sz = 3;
+            // int ofst = (window_sz - 1) / 2;
 
-
-            // tf::TransformListener up_listener;
-            // tf::StampedTransform up_transform;
-            // tf::Matrix3x3 echo_m_euler;
-            // tf::Matrix3x3 up_m_inv_euler;
-            // double up_camera_roll;
-            // double up_camera_pitch;
-            // double up_camera_yaw;
-
-            // //Instantiate a local listener
-            // tf::TransformListener echoListener;
-                        
-            // std::string source_frame_id = "map";
-            // std::string target_frame_id = "body_aligned_imu_link";
-            
-            // // Wait for up to one second for the first transforms to become avaiable. 
-            // echoListener.waitForTransform(source_frame_id, target_frame_id, ros::Time(), ros::Duration(1.0));
-            
-            // // up camera tf listener
-            // try
-            // {
-            //     // up_listener.waitForTransform("map", "os1_lidar", ros::Time(0), ros::Duration(10.0) );
-            //     // up_listener.lookupTransform(source_frame_id, target_frame_id, ros::Time(0), up_transform);
-            //     // up_m_euler.setRotation(up_transform.getRotation());
-            //     // int up_solution_number = 1;
-            //     // up_m_euler.getEulerYPR(up_camera_yaw, up_camera_pitch, up_camera_roll, up_solution_number);
-
-            //     tf::StampedTransform echo_transform;
-            //     echoListener.lookupTransform(source_frame_id, target_frame_id, ros::Time(), echo_transform);
-
-            //     // Get RPY
-            //     double yaw, pitch, roll;
-            //     echo_transform.getBasis().getRPY(roll, pitch, yaw);
-
-            //     // Get rotation
-            //     tf::Quaternion q = echo_transform.getRotation();
-            //     echo_m_euler.setRotation(q);
-
-            //     // Get translation
-            //     tf::Vector3 v = echo_transform.getOrigin();
-
-            //     // Assign elements of rotation matrix
-                
-            //     float m11 = echo_m_euler.getColumn(0).getX();
-            //     float m21 = echo_m_euler.getColumn(0).getY();
-            //     float m31 = echo_m_euler.getColumn(0).getZ();
-            //     float m41 = 0;
-
-            //     float m12 = echo_m_euler.getColumn(1).getX();
-            //     float m22 = echo_m_euler.getColumn(1).getY();
-            //     float m32 = echo_m_euler.getColumn(1).getZ();
-            //     float m42 = 0;
-
-            //     float m13 = echo_m_euler.getColumn(2).getX();
-            //     float m23 = echo_m_euler.getColumn(2).getY();
-            //     float m33 = echo_m_euler.getColumn(2).getZ();
-            //     float m43 = 0;
-
-            //     float m14 = echo_transform.getOrigin().getX();
-            //     float m24 = echo_transform.getOrigin().getY();
-            //     float m34 = echo_transform.getOrigin().getZ();
-            //     float m44 = 1;
-
-            //     std::cout << "---------------------------------------------------" << std::endl;
-            //     std::cout << "---------------------------------------------------" << std::endl;
-            //     std::cout << "---------------------------------------------------" << std::endl;
-            //     std::cout << "SEQUENCE NUMBER: " << seq                            << std::endl;
-            //     std::cout << "---------------------------------------------------" << std::endl;
-            //     // Print translation
-            //     std::cout << "Translation:                [ " << v.getX() << ", " << v.getY() << ", " << v.getZ() << " ]" << std::endl;
-            //     std::cout   << "Rotation: in Quaternion   [ " << q.getX() << ", " << q.getY() << ", " << q.getZ() << ", " << q.getW() << " ]" << std::endl
-            //                 << "          in RPY (radian) [ " <<  roll << ", " << pitch << ", " << yaw << " ]" << std::endl
-            //                 << "          in RPY (degree) [ " <<  roll*180.0/M_PI << ", " << pitch*180.0/M_PI << ", " << yaw*180.0/M_PI << " ]" << std::endl;
-            //     std::cout   << "Transformation Matrix R1  [ " << m11 << ", " << m12 << ", " << m13 << ", " << m14 << " ]" << std::endl;
-            //     std::cout   << "Transformation Matrix R2  [ " << m21 << ", " << m22 << ", " << m23 << ", " << m24 << " ]" << std::endl;
-            //     std::cout   << "Transformation Matrix R3  [ " << m31 << ", " << m32 << ", " << m33 << ", " << m34 << " ]" << std::endl;
-            //     std::cout   << "Transformation Matrix R4  [ " << m41 << ", " << m42 << ", " << m43 << ", " << m44 << " ]" << std::endl;
-
-            //     // Export tf to csv file
-            //     std::string tf_filename = "tf_" + std::to_string(seq) + ".csv";
-
-            //     std::ofstream tf_file;
-            //     tf_file.open (tf_filename.c_str());
-            //     tf_file << m11 << "," << m12 << "," << m13 << "," << m14 << "\n";
-            //     tf_file << m21 << "," << m22 << "," << m23 << "," << m24 << "\n";
-            //     tf_file << m31 << "," << m32 << "," << m33 << "," << m34 << "\n";
-            //     tf_file << m41 << "," << m42 << "," << m43 << "," << m44 << "\n";
-            //     tf_file.close();
-            
-
-            // }
-            // catch (tf::TransformException ex)
-            // {
-            //     ROS_WARN("%s",ex.what());
+            // for (int u = 0 + ofst; u < H - ofst; u++) {
+            //     for (int v = 0 + ofst; v < W - ofst; v++) {
+            //         const size_t vv = (v + px_offset[u]) % W;
+            //         const size_t index = vv * H + u;
+            //         const auto& pt = cloud_in[index];
+            //         range_img.at<float>(u,v) = pt.range * 1e-3; // Physical range from 0 - 100 m (converting from mm --> m)
+            //         // range_img.at<float>(u,v) = pt.range * 5e-3; // Range for 8-bit image from 0 - 255
+            //         noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
+            //         intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
+            //         intensity_img.at<float>(u,v) = pt.intensity + 1.0f;
+            //     }
             // }
 
-            if(last_range_img.rows == 0 && last_range_img.cols == 0)
+            // Intensity Filter
+            pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
+            pcl::ExtractIndices<pcl::PointXYZI> extract;
+
+            for (int u = 0; u < H; u++)
             {
-                sum_range_img               = zero_range_msk.clone();
-                sum_of_sq_range_img         = zero_range_msk.clone();
-                acc_noreturn_img            = zero_range_msk.clone();
-                sum_range_img               = cv::Scalar::all(0.0);
-                sum_of_sq_range_img         = cv::Scalar::all(0.0);
-                acc_noreturn_img            = cv::Scalar::all(0.0);
-            }
-            else
-            {
-                // Reset Sums
-                if(((seq - 1) % 3) == 0)
+                for (int v = 0; v < W; v++)
                 {
-                    sum_range_img           = cv::Scalar::all(0.0);
-                    sum_of_sq_range_img     = cv::Scalar::all(0.0);
-                    acc_noreturn_img        = cv::Scalar::all(0.0);
+                    if(intensity_filter_img.at<float>(u,v) > 0.1)
+                    {
+                        const size_t vv = (v + px_offset[u]) % W;
+                        const size_t i = vv * H + u;
+                        inliers->indices.push_back(i);
+                    }
                 }
-                
-                // Compute sum of no return
-                cv::threshold(range_img, zeroreturn_img, 0.2, 1.0, THRESH_BINARY_INV);
-
-                acc_noreturn_img = acc_noreturn_img + zeroreturn_img;
-                
-                // Compute sum of range
-                sum_range_img = sum_range_img + intensity_img;
-
-                // Compute sum of squares
-                cv::multiply(intensity_img, intensity_img, sq_range_img);
-                sum_of_sq_range_img = sum_of_sq_range_img + sq_range_img;
-
-                // Compute sample standard deviation
-                if((seq % 3) == 0)
-                {
-                    float N = 3;
-                    cv::multiply(sum_range_img, sum_range_img, sq_of_sum_range_img);
-                    var_range_img = 1/(N-1)/2 * sum_of_sq_range_img - 1/(N*N-N) * sq_of_sum_range_img;
-
-                    cv::threshold(zeroreturn_img, acc_noreturn_msk, 0.2, 1.0, THRESH_BINARY_INV);
-                    // https://stackoverflow.com/questions/6656769/computing-standard-deviation-over-a-circular-buffer
-
-                    // cv::multiply(var_range_img, acc_noreturn_msk, var_range_img);
-
-                }
-
-            //     // Binarize depth (range) image
-            //     cv::threshold(range_img, return_img, 0.0, 1.0, THRESH_BINARY);
-
-            //     // cv::blur(range_img, mean_s_img, cv::Size(9,9)); //Or whatever blurring you want
-
-            //     // Average range image
-            //     cv::boxFilter(range_img, avg_range_img, -1, cv::Size(5,5), cv::Point(-1,-1), false); // do not normalize here
-
-            //     // Average binarized range image (return image)
-            //     cv::boxFilter(return_img, return_sum_img, -1, cv::Size(5,5), cv::Point(-1,-1), false); // do not normalize here
-
-            //     // Scale average range image
-            //     cv::divide(avg_range_img, return_sum_img, avg_range_img); // normalize here
-
-            //     // Subtract range image from average range image, threshold betwneen 0 and 10
-            //     cv::threshold(avg_range_img - range_img, dev_range_img, 0.0, 0.0, THRESH_TOZERO);
-            //     cv::threshold(dev_range_img, dev_range_img, 10.0, 10.0, THRESH_TRUNC);
-
-            //     // Subtract range image from average range image, binarize as pre-filter
-            //     cv::threshold(avg_range_img - range_img, dev_range_bin_img, 0.10, 1.0, THRESH_BINARY);
-
-            //     // std::cout << "cv::countNonZero(dev_range_img): " << cv::countNonZero(dev_range_bin_img) << std::endl;
-
-            //     // Compute difference between this frame and last frame (to remove dc content aka static gradients)
-            //     dev_diff_range_img = abs(dev_range_img - last_dev_range_img);
-
-            //     // Accumulate
-            //     var_t_img = 0.9 * last_var_t_img;
-            //     var_t_img = var_t_img + diff_range_img;
-
-            //     // Compute binary no-return image (1 = no return, 0 = return)
-            //     cv::threshold(range_img, noreturn_img, 0.2, 1.0, THRESH_BINARY_INV);
-            //     prob_noreturn_img = 0.9 * last_prob_noreturn_img;
-            //     prob_noreturn_img = prob_noreturn_img + noreturn_img;
-                
-            //     double min = 0, max = 0;
-            //     cv::Point minLoc(-1, -1), maxLoc(-1, -1);
-            //     cv::minMaxLoc(dev_diff_range_img, &min, &max, &minLoc, &maxLoc);
-            //     // std::cout << "min: " << min << std::endl;
-            //     // std::cout << "max: " << max << std::endl;
-
-            //     // https://stackoverflow.com/questions/18233691/how-to-index-and-modify-an-opencv-matrix
-
             }
 
-            // std::cout << range_img << std::endl;
+            extract.setInputCloud(cloud_in2);
+            extract.setIndices(inliers);
+            extract.setNegative(false);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr output(new pcl::PointCloud<pcl::PointXYZI>);
+            extract.filter(*output);
+
+            seq++;
+      
+            output->width = output->points.size ();
+            output->height = 1;
+            output->is_dense = true;
+            output->header.seq = seq;
+            output->header.frame_id = cloud_in2->header.frame_id;
+            pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
+            pub_intensity_filter_pcl_.publish (output);
 
             // Publish Range Image
             cv_bridge::CvImage new_range_msg;
@@ -443,7 +289,6 @@ namespace fog
             new_range_msg.header.frame_id           = cloud_in_ros->header.frame_id;        
             pub_range_img_.publish(new_range_msg.toImageMsg());
 
-
             // Publish Intensity Image
             cv_bridge::CvImage intensity_msg;
             intensity_msg.encoding              = sensor_msgs::image_encodings::TYPE_32FC1;
@@ -452,256 +297,77 @@ namespace fog
             intensity_msg.header.frame_id       = cloud_in_ros->header.frame_id;        
             pub_intensity_img_.publish(intensity_msg.toImageMsg());
 
-            // Publish Log Intensity Image
-            cv_bridge::CvImage log_intensity_msg;
-            log_intensity_msg.encoding              = sensor_msgs::image_encodings::TYPE_32FC1;
-            log_intensity_msg.image                 = log_intensity_img;
-            log_intensity_msg.header.stamp          = ros::Time::now();
-            log_intensity_msg.header.frame_id       = cloud_in_ros->header.frame_id;        
-            pub_log_intensity_img_.publish(log_intensity_msg.toImageMsg());
+            // Publish Intensity Filter
+            cv_bridge::CvImage intensity_filter_msg;
+            intensity_filter_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
+            intensity_filter_msg.image                      = intensity_filter_img;
+            intensity_filter_msg.header.stamp               = ros::Time::now();
+            intensity_filter_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
+            pub_intensity_filter_img_.publish(intensity_filter_msg.toImageMsg());
 
-        //     // Publish Range Avg Image
-        //     cv_bridge::CvImage avg_range_msg;
-        //     avg_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        //     avg_range_msg.image                      = avg_range_img;
-        //     avg_range_msg.header.stamp               = ros::Time::now();
-        //     avg_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        //     pub_avg_range_img_.publish(avg_range_msg.toImageMsg());
+            ///////////////////////
+            // CALCULATE NORMALS //
+            ///////////////////////
 
-        //     // Publish Diff Range Image
-        //     cv_bridge::CvImage diff_range_msg;
-        //     diff_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        //     diff_range_msg.image                      = diff_range_img;
-        //     diff_range_msg.header.stamp               = ros::Time::now();
-        //     diff_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        //     pub_diff_range_img_.publish(diff_range_msg.toImageMsg());
-
-            // Publish Variance of Range Image
-            cv_bridge::CvImage var_range_msg;
-            var_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-            var_range_msg.image                      = var_range_img;
-            var_range_msg.header.stamp               = ros::Time::now();
-            var_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-            pub_var_range_img_.publish(var_range_msg.toImageMsg());
-
-        //     // Publish Variance of Range Image
-        //     cv_bridge::CvImage sum_noreturn_msg;
-        //     sum_noreturn_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        //     sum_noreturn_msg.image                      = acc_noreturn_img;
-        //     sum_noreturn_msg.header.stamp               = ros::Time::now();
-        //     sum_noreturn_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        //     pub_sum_noreturn_img_.publish(sum_noreturn_msg.toImageMsg());
-
-        //     // Publish Range Deviation Image
-        //     cv_bridge::CvImage dev_range_msg;
-        //     dev_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        //     dev_range_msg.image                      = dev_range_img;
-        //     dev_range_msg.header.stamp               = ros::Time::now();
-        //     dev_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        //     pub_dev_range_img_.publish(dev_range_msg.toImageMsg());
-
-        //     // Publish Range Deviation Diff Image
-        //     cv_bridge::CvImage dev_diff_range_msg;
-        //     dev_diff_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        //     dev_diff_range_msg.image                      = dev_diff_range_img;
-        //     dev_diff_range_msg.header.stamp               = ros::Time::now();
-        //     dev_diff_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        //     pub_dev_diff_range_img_.publish(dev_diff_range_msg.toImageMsg());
+            bool flag_pub_normal_pcl = 0;
             
-        //     // Publish Variance (in Time) Image
-        //     cv_bridge::CvImage var_t_msg;
-        //     var_t_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-        //     var_t_msg.image                      = var_t_img;
-        //     var_t_msg.header.stamp               = ros::Time::now();
-        //     var_t_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-        //     pub_var_t_img_.publish(var_t_msg.toImageMsg());
+            if(flag_pub_normal_pcl)
+            {
 
-        //     // Publish No Return Image
-        //     cv_bridge::CvImage noreturn_msg;
-        //     noreturn_msg.encoding               = sensor_msgs::image_encodings::TYPE_32FC1;
-        //     noreturn_msg.image                  = noreturn_img;
-        //     noreturn_msg.header.stamp           = ros::Time::now();
-        //     noreturn_msg.header.frame_id        = cloud_in_ros->header.frame_id;        
-        //     pub_noreturn_img_.publish(noreturn_msg.toImageMsg());
+                pcl::search::Search<pcl::PointXYZI>::Ptr tree_xyz;
 
-        //     // Publish No Return Prob Image
-        //     cv_bridge::CvImage prob_noreturn_msg;
-        //     prob_noreturn_msg.encoding          = sensor_msgs::image_encodings::TYPE_32FC1;
-        //     prob_noreturn_msg.image             = acc_noreturn_img;
-        //     prob_noreturn_msg.header.stamp      = ros::Time::now();
-        //     prob_noreturn_msg.header.frame_id   = cloud_in_ros->header.frame_id;        
-        //     pub_prob_noreturn_img_.publish(prob_noreturn_msg.toImageMsg());
+                // Use KDTree for non-organized data
+                tree_xyz.reset(new pcl::search::KdTree<pcl::PointXYZI> (false));
 
-            last_range_img          = range_img;
-        //     last_dev_range_img      = dev_range_img;
-        //     last_var_t_img          = var_t_img;
-        //     last_noreturn_img       = noreturn_img;
-        //     last_prob_noreturn_img  = prob_noreturn_img;
+                // if (cloud_in2->isOrganized ())
+                // {
+                //     std::cout << "org" << std::endl;
+                //     tree_xyz.reset(new pcl::search::OrganizedNeighbor<pcl::PointXYZI> ());
+                // }
+                // else
+                // {
+                //     std::cout << "not org" << std::endl;
+                //     // Use KDTree for non-organized data
+                //     tree_xyz.reset(new pcl::search::KdTree<pcl::PointXYZI> (false));
+                // }
+
+                // Set input pointcloud for search tree
+                tree_xyz->setInputCloud(cloud_in2);
+
+                pcl::NormalEstimationOMP<pcl::PointXYZI, pcl::PointXYZINormal> ne; // NormalEstimationOMP uses more CPU on NUC (do not use OMP!)
+                ne.setInputCloud(cloud_in2);
+                ne.setSearchMethod(tree_xyz);
+
+                // Set viewpoint, very important so normals are all pointed in the same direction
+                ne.setViewPoint(std::numeric_limits<float>::max (), std::numeric_limits<float>::max (), std::numeric_limits<float>::max ());
+
+                pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloud_ne (new pcl::PointCloud<pcl::PointXYZINormal>);
+
+                ne.setRadiusSearch(0.05);
+                ne.compute(*cloud_ne);
+
+                // Assign original xyz data to normal estimate cloud (this is necessary because by default the xyz fields are empty)
+                for (int i = 0; i < cloud_in2->points.size(); i++)
+                {
+                    cloud_ne->points[i].x = cloud_in2->points[i].x;
+                    cloud_ne->points[i].y = cloud_in2->points[i].y;
+                    cloud_ne->points[i].z = cloud_in2->points[i].z;
+                    cloud_ne->points[i].intensity = cloud_in2->points[i].intensity;
+                }
+                
+                cloud_ne->width = cloud_ne->points.size ();
+                cloud_ne->height = 1;
+                cloud_ne->is_dense = true;
+                cloud_ne->header.seq = seq;
+                cloud_ne->header.frame_id = cloud_in2->header.frame_id;
+                pcl_conversions::toPCL(ros::Time::now(), cloud_ne->header.stamp);
+                pub_normal_pcl_.publish (cloud_ne);
+
+            }
 
 
-        //     // Image Filter
 
-        //     // compute sum of positive matrix elements
-        //     // (assuming that M isa double-precision matrix)
-        //     double sum=0;
-        //     int n_above = 2;
-        //     int n_below = 2;
-        //     int n_left  = 2;
-        //     int n_right = 2;
-
-        //     cv::Mat filtered_img(H, W, CV_32FC1, 0.0);
-
-        //     std::vector<float> kernel_vec = {1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
-        //                                     1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
-        //                                     1/sqrt(2) , 1/sqrt(2),         0, 1/sqrt(2), 1/sqrt(2),
-        //                                     1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
-        //                                     1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2)};
-
-        //     // std::vector<float> kernel_vec = {1/sqrt(8) , 1/sqrt(5), 1/sqrt(4), 1/sqrt(5), 1/sqrt(8),
-        //     //                                  1/sqrt(5) , 1/sqrt(4), 1/sqrt(2), 1/sqrt(4), 1/sqrt(5),
-        //     //                                  1/sqrt(4) , 1/sqrt(1),        0 , 1/sqrt(1), 1/sqrt(4),
-        //     //                                  1/sqrt(5) , 1/sqrt(4), 1/sqrt(2), 1/sqrt(4), 1/sqrt(5),
-        //     //                                  1/sqrt(8) , 1/sqrt(5), 1/sqrt(4), 1/sqrt(5), 1/sqrt(8)};
             
-        //     std::vector<float> bool_vec;
-
-        //     for(int i = 0; i < range_img.rows; i++)
-        //     {
-        //         for(int j = 0; j < range_img.cols; j++)
-        //         {
-        //             if( (i < n_above) || (i > range_img.rows - n_below) || (j < n_left) || (j > range_img.cols - n_right || range_img.at<float>(i,j) == 0) || dev_range_bin_img.at<float>(i,j) == 0 )
-        //             {
-        //                 filtered_img.at<float>(i,j) = 0;
-        //             }
-        //             else
-        //             {
-        //                 std::vector<float> data_vec;
-        //                 std::vector<float> pixel_vec(25, range_img.at<float>(i,j));
-
-        //                 for(int m = -n_left; m <= n_right; m++)
-        //                 {
-        //                     for(int n = -n_above; n <= n_below; n++)
-        //                     {
-        //                         data_vec.push_back(range_img.at<float>(i-m,j-n));
-        //                     }
-        //                 }
-
-        //                 // std::cout << "data_vec: ";
-        //                 // for (auto i : data_vec) std::cout << i << ' ';
-        //                 // std::cout << '\n';
-
-        //                 for(auto& element : data_vec)
-        //                 {
-        //                     if(element != 0)
-        //                     {
-        //                         element = std::max(-0.01f, (element - range_img.at<float>(i,j)))/element;
-        //                     }
-        //                 }
-
-        //                 float sum = std::inner_product(std::begin(data_vec), std::end(data_vec), std::begin(kernel_vec), 0.0);
-
-        //                 float cnt_nonzero = std::count_if(data_vec.begin(), data_vec.end(),[&](float const& val){ return val != 0; });
-
-                        
-        //                 float avgval = sum / cnt_nonzero;
-
-        //                 filtered_img.at<float>(i,j) = avgval;
-                        
-        //                 // std::cout << "data_vec: ";
-        //                 // for (auto i : data_vec) std::cout << i << ' ';
-        //                 // std::cout << '\n';
-
-        //                 // std::cout << "pixel_vec: ";
-        //                 // for (auto i : pixel_vec) std::cout << i << ' ';
-        //                 // std::cout << '\n';
-
-        //                 // std::cout << "kernel_vec: ";
-        //                 // for (auto i : kernel_vec) std::cout << i << ' ';
-        //                 // std::cout << '\n';
-
-        //                 // std::cout << "dot_product: " << sum;
-        //                 // std::cout << '\n';
-
-        //                 // std::cout << "cnt_nonzero: " << cnt_nonzero;
-        //                 // std::cout << '\n';
-
-        //                 // std::cout << "avgval: " << avgval;
-        //                 // std::cout << '\n';
-
-        //                 // std::cout << '\n';
-        //             }
-        //         }
-        //     }
-
-        //     // Extract PCL Indices
-        //     cv::Mat filter_img(H, W, CV_32FC1, 0.0);
-        //     cv::threshold(filtered_img, filter_img, 0.50, 1.0, THRESH_TOZERO); // dev_diff_range_img
-            
-        //     // // Try to publish half of the point cloud
-        //     pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-        //     pcl::ExtractIndices<pcl::PointXYZ> extract;
-
-        //     for (int u = 0; u < H; u++)
-        //     {
-        //         for (int v = 0; v < W; v++)
-        //         {
-        //             if(filter_img.at<float>(u,v) > 0.1)
-        //             {
-        //                 const size_t vv = (v + px_offset[u]) % W;
-        //                 const size_t i = vv * H + u;
-        //                 inliers->indices.push_back(i);
-        //             }
-        //         }
-        //     }
-
-        //     extract.setInputCloud(cloud_in2);
-        //     extract.setIndices(inliers);
-        //     extract.setNegative(false);
-        //     pcl::PointCloud<pcl::PointXYZ>::Ptr output(new pcl::PointCloud<pcl::PointXYZ>);
-        //     extract.filter(*output);
-            
-        //     output->width = output->points.size ();
-        //     output->height = 1;
-        //     output->is_dense = true;
-
-            seq++;
-        //     output->header.seq = seq;
-        //     output->header.frame_id = cloud_in2->header.frame_id;
-        //     pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
-        //     pub_conf_pcl_.publish (output);
-        // }
-        // else
-        // {
-        //     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in (new pcl::PointCloud<pcl::PointXYZ>);
-        //     pcl::fromROSMsg(*cloud_in_ros, *cloud_in);
-
-        //     // // Try to publish half of the point cloud
-        //     pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-        //     pcl::ExtractIndices<pcl::PointXYZ> extract;
-
-        //     std::cout << "seq: " << seq << std::endl;
-
-        //     for (int i = seq * 16; i < seq * 16 + 16; i++)
-        //     {
-        //         inliers->indices.push_back(i);
-        //     }
-
-        //     extract.setInputCloud(cloud_in);
-        //     extract.setIndices(inliers);
-        //     extract.setNegative(false);
-        //     pcl::PointCloud<pcl::PointXYZ>::Ptr output(new pcl::PointCloud<pcl::PointXYZ>);
-        //     extract.filter(*output);
-            
-        //     output->width = output->points.size ();
-        //     output->height = 1;
-        //     output->is_dense = true;
-
-        //     seq++;
-        //     output->header.seq = seq;
-        //     output->header.frame_id = cloud_in->header.frame_id;
-        //     pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
-        //     pub_conf_pcl_.publish (output);
-
         }
     
     };

@@ -9,10 +9,11 @@
   <arg name="bag_dir" default="/home/erush91/data/radar/" />
   <arg name="bag_file1" default="fog_garage_artifacts_0.bag" />
   <arg name="start_time" default="0" />
-  <arg name="rate" default="1.0" />
+  <arg name="rate" default="1.0" /> <!-- normal_pcl can only run at 0.08 or slower -->
 
   <rosparam>
-    use_system_time: True
+    use_sim_time: True
+    <!-- use_system_time: True -->
   </rosparam>
 
   <node pkg="rviz" type="rviz" name="rviz" args="-d $(arg rviz_dir)$(arg rviz_file)" />

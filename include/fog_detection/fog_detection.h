@@ -95,7 +95,6 @@ namespace fog
       ros::Subscriber sub_low_depth_pcl_;
 
       ros::Publisher pub_output_;
-      ros::Publisher pub_conf_pcl_;
 
       ros::Publisher pub_range_img_;
       ros::Publisher pub_avg_range_img_;
@@ -114,6 +113,10 @@ namespace fog
 
       ros::Publisher pub_var_range_img_;
       ros::Publisher pub_sum_noreturn_img_;
+
+      ros::Publisher pub_intensity_filter_img_;
+      ros::Publisher pub_intensity_filter_pcl_;
+      ros::Publisher pub_normal_pcl_;
 
       ros::NodeHandle nh;
       ros::NodeHandle private_nh;
