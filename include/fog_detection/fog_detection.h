@@ -186,7 +186,6 @@ namespace fog
       inline bool computePointNormal(cv::Mat &x,
                                      cv::Mat &y,
                                      cv::Mat &z,
-                                     const std::vector<int> &indices,
                                      float &nx, float &ny, float &nz, float &curvature);
 
     private:

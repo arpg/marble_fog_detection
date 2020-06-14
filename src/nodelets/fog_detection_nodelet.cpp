@@ -407,11 +407,58 @@ namespace fog
 
             }
 
+            float nx;
+            float ny;
+            float nz;
+            float curvature;
+            
+            // Set size of window
+            int width = 3;
+            int height = 3;
+
+            // Compute offset
+            int w_ofst = (width-1)  / 2;
+            int h_ofst = (height-1) / 2;
+
+            cv::Mat x, y, z, aaa;
+            cv::Rect roi;
+            
+            roi.height = 3;
+            roi.width  = 3;
+            int cntr = 0;
+            
+            for (int u = 0; u < H - roi.height; u++)
+            {
+                for (int v = 0; v < W - roi.width; v++)
+                {
+                    roi.y = u;
+                    roi.x = v;
+                    x = img_x(roi);
+                    y = img_y(roi);
+                    z = img_z(roi);
+                    computePointNormal(x,
+                                        y,
+                                        z,
+                                        nx, ny, nz, curvature);
+
+                    // std::cout << "x: " << x << std::endl;
+                    // std::cout << "y: " << y << std::endl;
+                    // std::cout << "z: " << z << std::endl;
+                    // std::cout << "nx: " << nx << std::endl;
+                    // std::cout << "ny: " << ny << std::endl;
+                    // std::cout << "nz: " << nz << std::endl;
+                    // std::cout << "curvature: " << curvature << std::endl;
+                }
+            }
             
 
+            Rect srcRect( Point(1, 1), x.size() ); //select the 2nd row
+            Rect dstRect( Point(0, 0), x.size() ); //destination in (3,5), size same as srcRect
 
+            dstRect = dstRect & Rect( Point(0, 0), x.size() ); //intersection to avoid out of range
+            srcRect = Rect( srcRect.tl(), x.size() ); //adjust source size same as safe destination
+            img_x(srcRect).copyTo(x(dstRect)); //copy from (0,1) to (3,5) max allowed cols
 
-            
         }
     
     };
@@ -625,7 +672,6 @@ namespace fog
     FogDetectionNodelet::computePointNormal(cv::Mat &x,
                                             cv::Mat &y,
                                             cv::Mat &z,
-                                            const std::vector<int> &indices,
                                             float &nx, float &ny, float &nz, float &curvature)
     {
 
@@ -635,12 +681,11 @@ namespace fog
        /** \brief 16-bytes aligned placeholder for the XYZ centroid of a surface patch. */
        Eigen::Vector4f xyz_centroid_;
                
-        if (indices.size () < 3 || 
-            computeMeanAndCovarianceMatrix(x, y, z, covariance_matrix_, xyz_centroid_) == 0)
-        {
-            nx = ny = nz = curvature = std::numeric_limits<float>::quiet_NaN ();
-            return false;
-        }
+        computeMeanAndCovarianceMatrix(x, y, z, covariance_matrix_, xyz_centroid_);
+        // {
+        //     nx = ny = nz = curvature = std::numeric_limits<float>::quiet_NaN ();
+        //     return false;
+        // }
 
         // Get the plane normal and surface curvature
         FogDetectionNodelet::solvePlaneParameters(covariance_matrix_, nx, ny, nz, curvature);
