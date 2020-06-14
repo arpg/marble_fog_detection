@@ -168,6 +168,27 @@ namespace fog
                                     int width,
                                     int height);
 
+      template <typename Matrix, typename Vector>
+      inline void eigen33(const Matrix& mat,
+                          typename Matrix::Scalar& eigenvalue,
+                          Vector& eigenvector);
+
+      template <typename Scalar>
+      inline unsigned int computeMeanAndCovarianceMatrix(cv::Mat &x,
+                                                         cv::Mat &y,
+                                                         cv::Mat &z,
+                                                         Eigen::Matrix<Scalar, 3, 3> &covariance_matrix,
+                                                         Eigen::Matrix<Scalar, 4, 1> &centroid);
+        
+      inline void solvePlaneParameters(const Eigen::Matrix3f &covariance_matrix,
+                                       float &nx, float &ny, float &nz, float &curvature);
+
+      inline bool computePointNormal(cv::Mat &x,
+                                     cv::Mat &y,
+                                     cv::Mat &z,
+                                     const std::vector<int> &indices,
+                                     float &nx, float &ny, float &nz, float &curvature);
+
     private:
 
       // Depth Camera Frames

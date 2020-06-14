@@ -121,12 +121,12 @@ namespace fog
     void FogDetectionNodelet::intensity_image_cb(const sensor_msgs::ImageConstPtr& image_msg)
     {
         analyze_intensity_images(image_msg,
-                             pub_intensity_img_,
-                             low_camera_pixel_x_offset,
-                             low_camera_pixel_y_offset,
-                             low_camera_pixel_width,
-                             low_camera_pixel_height
-                             );
+                                 pub_intensity_img_,
+                                 low_camera_pixel_x_offset,
+                                 low_camera_pixel_y_offset,
+                                 low_camera_pixel_width,
+                                 low_camera_pixel_height
+                                 );
     };
 
     void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
@@ -407,6 +407,8 @@ namespace fog
 
             }
 
+            
+
 
 
             
@@ -493,7 +495,7 @@ namespace fog
          * @tparam Matrix deduced input type providing similar in API as Eigen::Matrix
          */
         template <typename Vector, typename Matrix> static EigenVector<Vector, typename Matrix::Scalar>
-        getLargest3x3Eigenvector (const Matrix scaledMatrix)
+        getLargest3x3Eigenvector(const Matrix scaledMatrix)
         {
             using Scalar = typename Matrix::Scalar;
             using Index = typename Matrix::Index;
@@ -514,7 +516,7 @@ namespace fog
     }
         
     template <typename Matrix, typename Vector> inline void
-    eigen33 (const Matrix& mat, typename Matrix::Scalar& eigenvalue, Vector& eigenvector)
+    FogDetectionNodelet::eigen33(const Matrix& mat, typename Matrix::Scalar& eigenvalue, Vector& eigenvector)
     {
         using Scalar = typename Matrix::Scalar;
         // Scale the matrix so its entries are in [-1,1].  The scaling is applied
@@ -536,54 +538,28 @@ namespace fog
         eigenvector = detail::getLargest3x3Eigenvector<Vector> (scaledMat).vector;
     }
     
-    template <typename PointT, typename Scalar> inline unsigned int
-    computeMeanAndCovarianceMatrix (const pcl::PointCloud<PointT> &cloud,
-                                    Eigen::Matrix<Scalar, 3, 3> &covariance_matrix,
-                                    Eigen::Matrix<Scalar, 4, 1> &centroid)
+    template <typename Scalar> inline unsigned int
+    FogDetectionNodelet::computeMeanAndCovarianceMatrix(cv::Mat &x,
+                                                        cv::Mat &y,
+                                                        cv::Mat &z,
+                                                        Eigen::Matrix<Scalar, 3, 3> &covariance_matrix,
+                                                        Eigen::Matrix<Scalar, 4, 1> &centroid)
     {
-    // create the buffer on the stack which is much faster than using cloud[indices[i]] and centroid as a buffer
-    Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor> accu = Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor>::Zero ();
-    std::size_t point_count;
-    if (cloud.is_dense)
-    {
-        point_count = cloud.size ();
-        // For each point in the cloud
-        for (const auto& point: cloud)
-        {
-        accu [0] += point.x * point.x;
-        accu [1] += point.x * point.y;
-        accu [2] += point.x * point.z;
-        accu [3] += point.y * point.y; // 4
-        accu [4] += point.y * point.z; // 5
-        accu [5] += point.z * point.z; // 8
-        accu [6] += point.x;
-        accu [7] += point.y;
-        accu [8] += point.z;
-        }
-    }
-    else
-    {
-        point_count = 0;
-        for (const auto& point: cloud)
-        {
-        if (!isFinite (point))
-            continue;
-    
-        accu [0] += point.x * point.x;
-        accu [1] += point.x * point.y;
-        accu [2] += point.x * point.z;
-        accu [3] += point.y * point.y;
-        accu [4] += point.y * point.z;
-        accu [5] += point.z * point.z;
-        accu [6] += point.x;
-        accu [7] += point.y;
-        accu [8] += point.z;
-        ++point_count;
-        }
-    }
-    accu /= static_cast<Scalar> (point_count);
-    if (point_count != 0)
-    {
+        // create the buffer on the stack which is much faster than using cloud[indices[i]] and centroid as a buffer
+        Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor> accu = Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor>::Zero ();
+        
+        accu [0] = x.dot(x);
+        accu [1] = x.dot(y);
+        accu [2] = x.dot(z);
+        accu [3] = y.dot(y);
+        accu [4] = y.dot(z);
+        accu [5] = z.dot(z);
+        accu [6] = cv::sum(x)[0];
+        accu [7] = cv::sum(y)[0];
+        accu [8] = cv::sum(z)[0];
+
+        //Eigen::Vector3f vec = accu.tail<3> ();
+        //centroid.head<3> () = vec;//= accu.tail<3> ();
         //centroid.head<3> () = accu.tail<3> ();    -- does not compile with Clang 3.0
         centroid[0] = accu[6]; centroid[1] = accu[7]; centroid[2] = accu[8];
         centroid[3] = 1;
@@ -596,12 +572,14 @@ namespace fog
         covariance_matrix.coeffRef (3) = covariance_matrix.coeff (1);
         covariance_matrix.coeffRef (6) = covariance_matrix.coeff (2);
         covariance_matrix.coeffRef (7) = covariance_matrix.coeff (5);
-    }
-    return (static_cast<unsigned int> (point_count));
+        
+        int point_count = x.total();
+
+        return (static_cast<unsigned int> (point_count));
     }
     
     inline void
-    solvePlaneParameters (const Eigen::Matrix3f &covariance_matrix,
+    FogDetectionNodelet::solvePlaneParameters(const Eigen::Matrix3f &covariance_matrix,
                         float &nx, float &ny, float &nz, float &curvature)
     {
     // Avoid getting hung on Eigen's optimizers
@@ -615,7 +593,7 @@ namespace fog
     // Extract the smallest eigenvalue and its eigenvector
     EIGEN_ALIGN16 Eigen::Vector3f::Scalar eigen_value;
     EIGEN_ALIGN16 Eigen::Vector3f eigen_vector;
-    pcl::eigen33 (covariance_matrix, eigen_value, eigen_vector);
+    pcl::eigen33(covariance_matrix, eigen_value, eigen_vector);
     
     nx = eigen_vector [0];
     ny = eigen_vector [1];
@@ -629,7 +607,6 @@ namespace fog
         curvature = 0;
     }
   
-    template <typename PointInT, typename PointOutT>
 
     /** \brief Compute the Least-Squares plane fit for a given set of points, using their indices,
      * and return the estimated plane parameters together with the surface curvature.
@@ -643,9 +620,13 @@ namespace fog
      * \lambda_0 / (\lambda_0 + \lambda_1 + \lambda_2)
      * \f]
      */
+
     inline bool
-    computePointNormal (const pcl::PointCloud<PointInT> &cloud, const std::vector<int> &indices,
-                        float &nx, float &ny, float &nz, float &curvature)
+    FogDetectionNodelet::computePointNormal(cv::Mat &x,
+                                            cv::Mat &y,
+                                            cv::Mat &z,
+                                            const std::vector<int> &indices,
+                                            float &nx, float &ny, float &nz, float &curvature)
     {
 
         // Placeholder for the 3x3 covariance matrix at each surface patch
@@ -654,15 +635,15 @@ namespace fog
        /** \brief 16-bytes aligned placeholder for the XYZ centroid of a surface patch. */
        Eigen::Vector4f xyz_centroid_;
                
-        if (indices.size () < 3 ||
-            computeMeanAndCovarianceMatrix (cloud, indices, covariance_matrix_, xyz_centroid_) == 0)
+        if (indices.size () < 3 || 
+            computeMeanAndCovarianceMatrix(x, y, z, covariance_matrix_, xyz_centroid_) == 0)
         {
-        nx = ny = nz = curvature = std::numeric_limits<float>::quiet_NaN ();
-        return false;
+            nx = ny = nz = curvature = std::numeric_limits<float>::quiet_NaN ();
+            return false;
         }
 
         // Get the plane normal and surface curvature
-        solvePlaneParameters (covariance_matrix_, nx, ny, nz, curvature);
+        FogDetectionNodelet::solvePlaneParameters(covariance_matrix_, nx, ny, nz, curvature);
         return true;
     }
 
