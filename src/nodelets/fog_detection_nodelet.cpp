@@ -407,6 +407,61 @@ namespace fog
 
             }
 
+
+            
+            // cv::Mat &x,
+            // cv::Mat &y,
+            // cv::Mat &z,
+            // Eigen::Matrix<Scalar, 3, 3> &covariance_matrix,
+            // Eigen::Matrix<Scalar, 4, 1> &centroid
+                
+            // // create the buffer on the stack which is much faster than using cloud[indices[i]] and centroid as a buffer
+            // Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor> accu = Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor>::Zero ();
+            
+
+            // for (int u = 0; u < H - roi.height; u++)
+            // {
+            //     for (int v = 0; v < W - roi.width; v++)
+            //     {
+                    
+
+            //         accu [0] = x.at<float>(u,v)
+            //         accu [1] = x.dot(y);
+            //         accu [2] = x.dot(z);
+            //         accu [3] = y.dot(y);
+            //         accu [4] = y.dot(z);
+            //         accu [5] = z.dot(z);
+            //         accu [6] = cv::sum(x)[0];
+            //         accu [7] = cv::sum(y)[0];
+            //         accu [8] = cv::sum(z)[0];
+            //     }
+            // }
+
+
+            // //Eigen::Vector3f vec = accu.tail<3> ();
+            // //centroid.head<3> () = vec;//= accu.tail<3> ();
+            // //centroid.head<3> () = accu.tail<3> ();    -- does not compile with Clang 3.0
+            // centroid[0] = accu[6]; centroid[1] = accu[7]; centroid[2] = accu[8];
+            // centroid[3] = 1;
+            // covariance_matrix.coeffRef (0) = accu [0] - accu [6] * accu [6];
+            // covariance_matrix.coeffRef (1) = accu [1] - accu [6] * accu [7];
+            // covariance_matrix.coeffRef (2) = accu [2] - accu [6] * accu [8];
+            // covariance_matrix.coeffRef (4) = accu [3] - accu [7] * accu [7];
+            // covariance_matrix.coeffRef (5) = accu [4] - accu [7] * accu [8];
+            // covariance_matrix.coeffRef (8) = accu [5] - accu [8] * accu [8];
+            // covariance_matrix.coeffRef (3) = covariance_matrix.coeff (1);
+            // covariance_matrix.coeffRef (6) = covariance_matrix.coeff (2);
+            // covariance_matrix.coeffRef (7) = covariance_matrix.coeff (5);
+            
+            // int point_count = x.total();
+        
+
+
+
+
+
+
+
             float nx;
             float ny;
             float nz;
@@ -433,9 +488,13 @@ namespace fog
                 {
                     roi.y = u;
                     roi.x = v;
+
+
+
                     x = img_x(roi);
                     y = img_y(roi);
                     z = img_z(roi);
+                
                     computePointNormal(x,
                                         y,
                                         z,
@@ -675,6 +734,7 @@ namespace fog
                                             float &nx, float &ny, float &nz, float &curvature)
     {
 
+
         // Placeholder for the 3x3 covariance matrix at each surface patch
         EIGEN_ALIGN16 Eigen::Matrix3f covariance_matrix_;
 
@@ -687,8 +747,22 @@ namespace fog
         //     return false;
         // }
 
+                    auto start = high_resolution_clock::now();
         // Get the plane normal and surface curvature
         FogDetectionNodelet::solvePlaneParameters(covariance_matrix_, nx, ny, nz, curvature);
+                    auto stop = high_resolution_clock::now(); 
+
+                    // Subtract stop and start timepoints and 
+                    // cast it to required unit. Predefined units 
+                    // are nanoseconds, microseconds, milliseconds, 
+                    // seconds, minutes, hours. Use duration_cast() 
+                    // function. 
+
+                    auto duration = duration_cast<nanoseconds>(stop - start); 
+
+                    // To get the value of duration use the count() 
+                    // member function on the duration object 
+                    std::cout << duration.count() << std::endl; 
         return true;
     }
 
