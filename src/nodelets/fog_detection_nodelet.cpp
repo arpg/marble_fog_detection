@@ -183,6 +183,12 @@ namespace fog
             cv::Mat img_x(H, W, CV_32FC1, 0.1);
             cv::Mat img_y(H, W, CV_32FC1, 0.1);
             cv::Mat img_z(H, W, CV_32FC1, 0.1);
+            cv::Mat img_xx(H, W, CV_32FC1, 0.1);
+            cv::Mat img_xy(H, W, CV_32FC1, 0.1);
+            cv::Mat img_xz(H, W, CV_32FC1, 0.1);
+            cv::Mat img_yy(H, W, CV_32FC1, 0.1);
+            cv::Mat img_yz(H, W, CV_32FC1, 0.1);
+            cv::Mat img_zz(H, W, CV_32FC1, 0.1);
             cv::Mat img_d(H, W, CV_32FC1, 0.1);
             cv::Mat img_i(H, W, CV_32FC1, 0.1);
             cv::Mat img_r(H, W, CV_32FC1, 0.1);
@@ -233,6 +239,13 @@ namespace fog
                     img_x.at<float>(u,v) = pt.x;
                     img_y.at<float>(u,v) = pt.y;
                     img_z.at<float>(u,v) = pt.z;
+                    img_xx.at<float>(u,v) = pt.x * pt.x;
+                    img_xy.at<float>(u,v) = pt.x * pt.y;
+                    img_xz.at<float>(u,v) = pt.x * pt.z;
+                    img_yy.at<float>(u,v) = pt.y * pt.y;
+                    img_yz.at<float>(u,v) = pt.y * pt.z;
+                    img_zz.at<float>(u,v) = pt.z * pt.z;
+
                     img_d.at<float>(u,v) = pt.range * 1e-3;
                     img_i.at<float>(u,v) = pt.intensity;
                     img_r.at<float>(u,v) = pt.reflectivity;
@@ -277,21 +290,6 @@ namespace fog
             pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
             pub_intensity_filter_pcl_.publish (output);
             
-            /////////////////////////
-            // CALCULATE PCA (IMG) //
-            /////////////////////////
-
-            // int window_sz = 3;
-            // int ofst = (window_sz - 1) / 2;
-
-            // for (int u = 0 + ofst; u < H - ofst; u++) {
-            //     for (int v = 0 + ofst; v < W - ofst; v++) {
-            //         const size_t vv = (v + px_offset[u]) % W;
-            //         const size_t index = vv * H + u;
-            //         const auto& pt = cloud_in[index];
-            //     }
-            // }
-
             // Test Filter
             pcl::PointIndices::Ptr test_pcl(new pcl::PointIndices());
             pcl::ExtractIndices<pcl::PointXYZI> test_extract;
@@ -347,9 +345,9 @@ namespace fog
             intensity_filter_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
             pub_intensity_filter_img_.publish(intensity_filter_msg.toImageMsg());
 
-            ///////////////////////
-            // CALCULATE NORMALS //
-            ///////////////////////
+            ////////////////////////////////
+            // CALCULATE NORMALS (PCL NN) //
+            ////////////////////////////////
 
             bool flag_pub_normal_pcl = 0;
             
@@ -407,116 +405,113 @@ namespace fog
 
             }
 
+            ///////////////////////////////////
+            // CALCULATE NORMALS (IMAGE PCA) //
+            ///////////////////////////////////
 
+            bool flag_pub_normal_image_pca = 1;
             
-            // cv::Mat &x,
-            // cv::Mat &y,
-            // cv::Mat &z,
-            // Eigen::Matrix<Scalar, 3, 3> &covariance_matrix,
-            // Eigen::Matrix<Scalar, 4, 1> &centroid
-                
-            // // create the buffer on the stack which is much faster than using cloud[indices[i]] and centroid as a buffer
-            // Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor> accu = Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor>::Zero ();
-            
-
-            // for (int u = 0; u < H - roi.height; u++)
-            // {
-            //     for (int v = 0; v < W - roi.width; v++)
-            //     {
-                    
-
-            //         accu [0] = x.at<float>(u,v)
-            //         accu [1] = x.dot(y);
-            //         accu [2] = x.dot(z);
-            //         accu [3] = y.dot(y);
-            //         accu [4] = y.dot(z);
-            //         accu [5] = z.dot(z);
-            //         accu [6] = cv::sum(x)[0];
-            //         accu [7] = cv::sum(y)[0];
-            //         accu [8] = cv::sum(z)[0];
-            //     }
-            // }
-
-
-            // //Eigen::Vector3f vec = accu.tail<3> ();
-            // //centroid.head<3> () = vec;//= accu.tail<3> ();
-            // //centroid.head<3> () = accu.tail<3> ();    -- does not compile with Clang 3.0
-            // centroid[0] = accu[6]; centroid[1] = accu[7]; centroid[2] = accu[8];
-            // centroid[3] = 1;
-            // covariance_matrix.coeffRef (0) = accu [0] - accu [6] * accu [6];
-            // covariance_matrix.coeffRef (1) = accu [1] - accu [6] * accu [7];
-            // covariance_matrix.coeffRef (2) = accu [2] - accu [6] * accu [8];
-            // covariance_matrix.coeffRef (4) = accu [3] - accu [7] * accu [7];
-            // covariance_matrix.coeffRef (5) = accu [4] - accu [7] * accu [8];
-            // covariance_matrix.coeffRef (8) = accu [5] - accu [8] * accu [8];
-            // covariance_matrix.coeffRef (3) = covariance_matrix.coeff (1);
-            // covariance_matrix.coeffRef (6) = covariance_matrix.coeff (2);
-            // covariance_matrix.coeffRef (7) = covariance_matrix.coeff (5);
-            
-            // int point_count = x.total();
-        
-
-
-
-
-
-
-
-            float nx;
-            float ny;
-            float nz;
-            float curvature;
-            
-            // Set size of window
-            int width = 3;
-            int height = 3;
-
-            // Compute offset
-            int w_ofst = (width-1)  / 2;
-            int h_ofst = (height-1) / 2;
-
-            cv::Mat x, y, z, aaa;
-            cv::Rect roi;
-            
-            roi.height = 3;
-            roi.width  = 3;
-            int cntr = 0;
-            
-            for (int u = 0; u < H - roi.height; u++)
+            if(flag_pub_normal_image_pca)
             {
-                for (int v = 0; v < W - roi.width; v++)
-                {
-                    roi.y = u;
-                    roi.x = v;
 
-
-
-                    x = img_x(roi);
-                    y = img_y(roi);
-                    z = img_z(roi);
+                float nx;
+                float ny;
+                float nz;
+                float curvature;
                 
-                    computePointNormal(x,
-                                        y,
-                                        z,
-                                        nx, ny, nz, curvature);
+                // Set size of window
+                int width = 3;
+                int height = 3;
 
-                    // std::cout << "x: " << x << std::endl;
-                    // std::cout << "y: " << y << std::endl;
-                    // std::cout << "z: " << z << std::endl;
-                    // std::cout << "nx: " << nx << std::endl;
-                    // std::cout << "ny: " << ny << std::endl;
-                    // std::cout << "nz: " << nz << std::endl;
-                    // std::cout << "curvature: " << curvature << std::endl;
+                // Compute offset
+                int w_ofst = (width-1)  / 2;
+                int h_ofst = (height-1) / 2;
+
+                cv::Mat x, y, z, xx, xy, xz, yy, yz, zz;
+                cv::Rect roi;
+                
+                roi.height = 3;
+                roi.width  = 3;
+                int cntr = 0;
+                
+                for (int u = 0; u < H - roi.height; u++)
+                {
+                    for (int v = 0; v < W - roi.width; v++)
+                    {
+                        roi.y = u;
+                        roi.x = v;
+
+                        x   = img_x(roi);
+                        y   = img_y(roi);
+                        z   = img_z(roi);
+                        xx  = img_xx(roi);
+                        xy  = img_xy(roi);
+                        xz  = img_xz(roi);
+                        yy  = img_yy(roi);
+                        yz  = img_yz(roi);
+                        zz  = img_zz(roi);
+                    
+                        float sum_x   = cv::sum(x)[0];
+                        float sum_y   = cv::sum(y)[0];
+                        float sum_z   = cv::sum(z)[0];
+                        float sum_xx  = cv::sum(xx)[0];
+                        float sum_xy  = cv::sum(xy)[0];
+                        float sum_xz  = cv::sum(xz)[0];
+                        float sum_yy  = cv::sum(yy)[0];
+                        float sum_yz  = cv::sum(yz)[0];
+                        float sum_zz  = cv::sum(zz)[0];
+                        
+                        Eigen::Matrix<Scalar, 3, 3> covariance_matrix;
+                        Eigen::Matrix<Scalar, 4, 1> centroid;
+                        // create the buffer on the stack which is much faster than using cloud[indices[i]] and centroid as a buffer
+                        Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor> accu = Eigen::Matrix<Scalar, 1, 9, Eigen::RowMajor>::Zero ();
+                        
+                        accu [0] = sum_xx;
+                        accu [1] = sum_xy;
+                        accu [2] = sum_xz;
+                        accu [3] = sum_yy;
+                        accu [4] = sum_yz;
+                        accu [5] = sum_zz;
+                        accu [6] = sum_x;
+                        accu [7] = sum_y;
+                        accu [8] = sum_z;
+
+                        //Eigen::Vector3f vec = accu.tail<3> ();
+                        //centroid.head<3> () = vec;//= accu.tail<3> ();
+                        //centroid.head<3> () = accu.tail<3> ();    -- does not compile with Clang 3.0
+                        centroid[0] = accu[6]; centroid[1] = accu[7]; centroid[2] = accu[8];
+                        centroid[3] = 1;
+                        covariance_matrix.coeffRef (0) = accu [0] - accu [6] * accu [6];
+                        covariance_matrix.coeffRef (1) = accu [1] - accu [6] * accu [7];
+                        covariance_matrix.coeffRef (2) = accu [2] - accu [6] * accu [8];
+                        covariance_matrix.coeffRef (4) = accu [3] - accu [7] * accu [7];
+                        covariance_matrix.coeffRef (5) = accu [4] - accu [7] * accu [8];
+                        covariance_matrix.coeffRef (8) = accu [5] - accu [8] * accu [8];
+                        covariance_matrix.coeffRef (3) = covariance_matrix.coeff (1);
+                        covariance_matrix.coeffRef (6) = covariance_matrix.coeff (2);
+                        covariance_matrix.coeffRef (7) = covariance_matrix.coeff (5);
+                        
+                        int point_count = x.total();
+                        
+                    }
                 }
+
             }
-            
 
-            Rect srcRect( Point(1, 1), x.size() ); //select the 2nd row
-            Rect dstRect( Point(0, 0), x.size() ); //destination in (3,5), size same as srcRect
+            // auto start = high_resolution_clock::now();
+            // auto stop = high_resolution_clock::now();
 
-            dstRect = dstRect & Rect( Point(0, 0), x.size() ); //intersection to avoid out of range
-            srcRect = Rect( srcRect.tl(), x.size() ); //adjust source size same as safe destination
-            img_x(srcRect).copyTo(x(dstRect)); //copy from (0,1) to (3,5) max allowed cols
+            // // Subtract stop and start timepoints and
+            // // cast it to required unit. Predefined units
+            // // are nanoseconds, microseconds, milliseconds,
+            // // seconds, minutes, hours. Use duration_cast()
+            // // function.
+
+            // auto duration = duration_cast<nanoseconds>(stop - start);
+
+            // // To get the value of duration use the count()
+            // // member function on the duration object
+            // std::cout << duration.count() << std::endl;
 
         }
     
@@ -734,7 +729,6 @@ namespace fog
                                             float &nx, float &ny, float &nz, float &curvature)
     {
 
-
         // Placeholder for the 3x3 covariance matrix at each surface patch
         EIGEN_ALIGN16 Eigen::Matrix3f covariance_matrix_;
 
@@ -747,22 +741,9 @@ namespace fog
         //     return false;
         // }
 
-                    auto start = high_resolution_clock::now();
         // Get the plane normal and surface curvature
         FogDetectionNodelet::solvePlaneParameters(covariance_matrix_, nx, ny, nz, curvature);
-                    auto stop = high_resolution_clock::now(); 
 
-                    // Subtract stop and start timepoints and 
-                    // cast it to required unit. Predefined units 
-                    // are nanoseconds, microseconds, milliseconds, 
-                    // seconds, minutes, hours. Use duration_cast() 
-                    // function. 
-
-                    auto duration = duration_cast<nanoseconds>(stop - start); 
-
-                    // To get the value of duration use the count() 
-                    // member function on the duration object 
-                    std::cout << duration.count() << std::endl; 
         return true;
     }
 

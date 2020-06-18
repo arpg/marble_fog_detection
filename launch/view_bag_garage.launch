@@ -9,7 +9,7 @@
   <arg name="bag_dir" default="/home/erush91/data/radar/" />
   <arg name="bag_file1" default="fog_garage_artifacts_0.bag" />
   <arg name="start_time" default="0" />
-  <arg name="rate" default="0.30" /> <!-- normal_pcl can only run at 0.08 or slower -->
+  <arg name="rate" default="0.08" /> <!-- normal_pcl can only run at 0.08 or slower -->
 
   <rosparam>
     use_sim_time: True
