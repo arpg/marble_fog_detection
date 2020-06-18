@@ -411,6 +411,9 @@ namespace fog
 
             bool flag_pub_normal_image_pca = 1;
             
+
+            auto start = high_resolution_clock::now();
+            
             if(flag_pub_normal_image_pca)
             {
 
@@ -498,20 +501,19 @@ namespace fog
 
             }
 
-            // auto start = high_resolution_clock::now();
-            // auto stop = high_resolution_clock::now();
+            auto stop = high_resolution_clock::now();
 
-            // // Subtract stop and start timepoints and
-            // // cast it to required unit. Predefined units
-            // // are nanoseconds, microseconds, milliseconds,
-            // // seconds, minutes, hours. Use duration_cast()
-            // // function.
+            // Subtract stop and start timepoints and
+            // cast it to required unit. Predefined units
+            // are nanoseconds, microseconds, milliseconds,
+            // seconds, minutes, hours. Use duration_cast()
+            // function.
 
-            // auto duration = duration_cast<nanoseconds>(stop - start);
+            auto duration = duration_cast<nanoseconds>(stop - start);
 
-            // // To get the value of duration use the count()
-            // // member function on the duration object
-            // std::cout << duration.count() << std::endl;
+            // To get the value of duration use the count()
+            // member function on the duration object
+            std::cout << "\n" << duration.count() << "\n" << std::endl;
 
         }
     
