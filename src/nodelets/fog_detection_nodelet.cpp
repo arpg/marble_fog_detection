@@ -505,9 +505,6 @@ namespace fog
 
             bool flag_pub_normal_image_pca_fcn = 1;
             
-
-            auto start = high_resolution_clock::now();
-            
             if(flag_pub_normal_image_pca_fcn)
             {
 
@@ -545,16 +542,16 @@ namespace fog
                                            z,
                                            nx, ny, nz, curvature);
 
-                        // Placeholder for the 3x3 covariance matrix at each surface patch
-                        EIGEN_ALIGN16 Eigen::Matrix3f covariance_matrix_;
+                        // // Placeholder for the 3x3 covariance matrix at each surface patch
+                        // EIGEN_ALIGN16 Eigen::Matrix3f covariance_matrix_;
 
-                        /** \brief 16-bytes aligned placeholder for the XYZ centroid of a surface patch. */
-                        Eigen::Vector4f xyz_centroid_;
+                        // /** \brief 16-bytes aligned placeholder for the XYZ centroid of a surface patch. */
+                        // Eigen::Vector4f xyz_centroid_;
                             
-                        computeMeanAndCovarianceMatrix(x, y, z, covariance_matrix_, xyz_centroid_);
+                        // computeMeanAndCovarianceMatrix(x, y, z, covariance_matrix_, xyz_centroid_);
 
-                        // Get the plane normal and surface curvature
-                        solvePlaneParameters(covariance_matrix_, nx, ny, nz, curvature);
+                        // // Get the plane normal and surface curvature
+                        // solvePlaneParameters(covariance_matrix_, nx, ny, nz, curvature);
 
 
                         const size_t vv = (v + px_offset[u]) % W;
@@ -590,30 +587,22 @@ namespace fog
 
             }
 
-            auto stop = high_resolution_clock::now();
 
-            // Subtract stop and start timepoints and
-            // cast it to required unit. Predefined units
-            // are nanoseconds, microseconds, milliseconds,
-            // seconds, minutes, hours. Use duration_cast()
-            // function.
+            // auto start = high_resolution_clock::now();
+            // auto stop = high_resolution_clock::now();
 
-            auto duration = duration_cast<nanoseconds>(stop - start);
+            // // Subtract stop and start timepoints and
+            // // cast it to required unit. Predefined units
+            // // are nanoseconds, microseconds, milliseconds,
+            // // seconds, minutes, hours. Use duration_cast()
+            // // function.
 
-            // To get the value of duration use the count()
-            // member function on the duration object
-            std::cout << "\n" << duration.count() << "\n" << std::endl;
+            // auto duration = duration_cast<nanoseconds>(stop - start);
 
-
-
-
-
-
-
-
-
-
-                
+            // // To get the value of duration use the count()
+            // // member function on the duration object
+            // std::cout << "\n" << duration.count() << "\n" << std::endl;
+            
         }
     
     };
@@ -731,7 +720,7 @@ namespace fog
         Matrix scaledMat = mat / scale;
         
         Vector eigenvalues;
-        pcl::computeRoots (scaledMat, eigenvalues);
+        computeRoots (scaledMat, eigenvalues);
         
         eigenvalue = eigenvalues (0) * scale;
         
@@ -797,7 +786,7 @@ namespace fog
     // Extract the smallest eigenvalue and its eigenvector
     EIGEN_ALIGN16 Eigen::Vector3f::Scalar eigen_value;
     EIGEN_ALIGN16 Eigen::Vector3f eigen_vector;
-    eigen33(covariance_matrix, eigen_value, eigen_vector);
+    pcl::eigen33(covariance_matrix, eigen_value, eigen_vector);
     
     nx = eigen_vector [0];
     ny = eigen_vector [1];
@@ -843,6 +832,11 @@ namespace fog
         //     nx = ny = nz = curvature = std::numeric_limits<float>::quiet_NaN ();
         //     return false;
         // }
+
+        // Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> es;;
+        // es.compute(covariance_matrix_);
+        // auto eval = es.eigenvalues();
+        // auto evec = es.eigenvectors();
 
         // Get the plane normal and surface curvature
         FogDetectionNodelet::solvePlaneParameters(covariance_matrix_, nx, ny, nz, curvature);

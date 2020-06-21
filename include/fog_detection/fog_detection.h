@@ -85,6 +85,10 @@
 #include <chrono> 
 using namespace std::chrono; 
 
+#include <Eigen/Core>
+#include <Eigen/Eigenvalues> 
+
+
 
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
@@ -191,6 +195,12 @@ namespace fog
                                      cv::Mat &y,
                                      cv::Mat &z,
                                      float &nx, float &ny, float &nz, float &curvature);
+
+    template <typename Matrix, typename Roots> inline void
+    computeRoots (const Matrix& m, Roots& roots);
+
+    template <typename Scalar, typename Roots> inline void
+    computeRoots2 (const Scalar& b, const Scalar& c, Roots& roots);
 
     private:
 
