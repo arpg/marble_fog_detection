@@ -129,6 +129,7 @@ namespace fog
       ros::Publisher pub_intensity_filter_img_;
       ros::Publisher pub_intensity_filter_pcl_;
       ros::Publisher pub_normal_pcl_;
+      ros::Publisher pub_normal2_pcl_;
       ros::Publisher pub_test_pcl_;
 
       ros::NodeHandle nh;

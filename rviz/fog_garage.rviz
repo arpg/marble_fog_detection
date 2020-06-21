@@ -7,7 +7,10 @@ Panels:
         - /Global Options1
         - /Status1
         - /TF1
+        - /TF1/Frames1
         - /Normal1/Status1
+        - /PointCloud21
+        - /PointCloud21/Status1
       Splitter Ratio: 0.5
     Tree Height: 401
   - Class: rviz/Selection
@@ -91,12 +94,12 @@ Visualization Manager:
         map:
           Value: false
         os1_imu:
-          Value: true
+          Value: false
         os1_lidar:
-          Value: true
+          Value: false
         os1_sensor:
           Value: false
-      Marker Scale: 3
+      Marker Scale: 1
       Name: TF
       Show Arrows: true
       Show Axes: true
@@ -250,7 +253,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 999999
@@ -267,7 +270,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -280,12 +283,12 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 1428
+      Max Intensity: 1947
       Min Color: 0; 0; 0
-      Min Intensity: 12
+      Min Intensity: 10
       Name: Test
       Position Transformer: XYZ
       Queue Size: 10
@@ -294,6 +297,36 @@ Visualization Manager:
       Size (m): 0.009999999776482582
       Style: Flat Squares
       Topic: /fog_detection/out_test_pcl
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: false
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 1.8505117893218994
+        Min Value: -0.7321223616600037
+        Value: true
+      Axis: Z
+      Channel Name: normal_z
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: Intensity
+      Decay Time: 0
+      Enabled: true
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 0.537706196308136
+      Min Color: 0; 0; 0
+      Min Intensity: -0.9854469895362854
+      Name: PointCloud2
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.009999999776482582
+      Style: Flat Squares
+      Topic: /fog_detection/out_normal2_pcl
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
@@ -326,25 +359,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 7.467440128326416
+      Distance: 3.5506973266601562
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.8081537485122681
-        Y: -0.4779106676578522
-        Z: -0.22058260440826416
+        X: 0.20627540349960327
+        Y: 0.0137214045971632
+        Z: 0.8901718258857727
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.9198017120361328
+      Pitch: 0.5448025465011597
       Target Frame: base_radar_link
       Value: Orbit (rviz)
-      Yaw: 2.652275562286377
+      Yaw: 3.172290802001953
     Saved: ~
 Window Geometry:
   Displays:

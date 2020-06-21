@@ -54,6 +54,7 @@ namespace fog
         pub_intensity_filter_img_   = private_nh.advertise<sensor_msgs::Image>("out_intensity_filter_img", 10);
         pub_intensity_filter_pcl_   = private_nh.advertise<PointCloud>("out_intensity_filter_pcl", 10);
         pub_normal_pcl_             = private_nh.advertise<PointCloud>("out_normal_pcl", 10);
+        pub_normal2_pcl_            = private_nh.advertise<PointCloud>("out_normal2_pcl", 10);
         pub_test_pcl_               = private_nh.advertise<PointCloud>("out_test_pcl", 10);
 
         // Create static tf broadcaster (-30 pitch, Realsense pointed down)
@@ -405,15 +406,12 @@ namespace fog
 
             }
 
-            ///////////////////////////////////
-            // CALCULATE NORMALS (IMAGE PCA) //
-            ///////////////////////////////////
+            ///////////////////////////////////////////
+            // CALCULATE NORMALS (IMAGE PCA) [0.40s] //
+            ///////////////////////////////////////////
 
-            bool flag_pub_normal_image_pca = 1;
-            
-
-            auto start = high_resolution_clock::now();
-            
+            bool flag_pub_normal_image_pca = 0;
+                        
             if(flag_pub_normal_image_pca)
             {
 
@@ -501,6 +499,97 @@ namespace fog
 
             }
 
+            ///////////////////////////////////////////////
+            // CALCULATE NORMALS (IMAGE PCA FCN) [0.25s] //
+            ///////////////////////////////////////////////
+
+            bool flag_pub_normal_image_pca_fcn = 1;
+            
+
+            auto start = high_resolution_clock::now();
+            
+            if(flag_pub_normal_image_pca_fcn)
+            {
+
+                float nx;
+                float ny;
+                float nz;
+                float curvature;
+
+                cv::Mat x, y, z;
+                cv::Rect roi;
+
+                // Set size of window
+                roi.height = 3;
+                roi.width  = 3;
+
+
+                pcl::PointCloud<pcl::PointXYZINormal>::Ptr cloud_norm (new pcl::PointCloud<pcl::PointXYZINormal>);
+                cloud_norm->width = cloud_in.width;
+                cloud_norm->height = cloud_in.height;
+                cloud_norm->resize(cloud_norm->height*cloud_norm->width);
+                
+                // Assign original xyz data to normal estimate cloud (this is necessary because by default the xyz fields are empty)
+
+                for (int u = 0; u < H - roi.height; u++)
+                {
+                    for (int v = 0; v < W - roi.width; v++)
+                    {
+                        roi.y = u;
+                        roi.x = v;
+                        x = img_x(roi);
+                        y = img_y(roi);
+                        z = img_z(roi);
+                        computePointNormal(x,
+                                           y,
+                                           z,
+                                           nx, ny, nz, curvature);
+
+                        // Placeholder for the 3x3 covariance matrix at each surface patch
+                        EIGEN_ALIGN16 Eigen::Matrix3f covariance_matrix_;
+
+                        /** \brief 16-bytes aligned placeholder for the XYZ centroid of a surface patch. */
+                        Eigen::Vector4f xyz_centroid_;
+                            
+                        computeMeanAndCovarianceMatrix(x, y, z, covariance_matrix_, xyz_centroid_);
+
+                        // Get the plane normal and surface curvature
+                        solvePlaneParameters(covariance_matrix_, nx, ny, nz, curvature);
+
+
+                        const size_t vv = (v + px_offset[u]) % W;
+                        const size_t index = vv * H + u;
+                        
+                        const auto& pt = cloud_in[index];
+
+                        cloud_norm->points[index].x = pt.x;
+                        cloud_norm->points[index].y = pt.y;
+                        cloud_norm->points[index].z = pt.z;
+                        cloud_norm->points[index].intensity = pt.intensity;
+                        cloud_norm->points[index].normal_x = nx;
+                        cloud_norm->points[index].normal_y = ny;
+                        cloud_norm->points[index].normal_z = nz;
+
+                        // std::cout << "x: " << x << std::endl;
+                        // std::cout << "y: " << y << std::endl;
+                        // std::cout << "z: " << z << std::endl;
+                        // std::cout << "nx: " << nx << std::endl;
+                        // std::cout << "ny: " << ny << std::endl;
+                        // std::cout << "nz: " << nz << std::endl;
+                        // std::cout << "curvature: " << curvature << std::endl;
+                    }
+                }
+
+            // cloud_norm->width = cloud_norm->points.size ();
+            // cloud_norm->height = 1;
+            cloud_norm->is_dense = true;
+            cloud_norm->header.seq = seq;
+            cloud_norm->header.frame_id = cloud_in2->header.frame_id;
+            pcl_conversions::toPCL(ros::Time::now(), cloud_norm->header.stamp);
+            pub_normal2_pcl_.publish (cloud_norm);
+
+            }
+
             auto stop = high_resolution_clock::now();
 
             // Subtract stop and start timepoints and
@@ -515,6 +604,16 @@ namespace fog
             // member function on the duration object
             std::cout << "\n" << duration.count() << "\n" << std::endl;
 
+
+
+
+
+
+
+
+
+
+                
         }
     
     };
@@ -632,7 +731,7 @@ namespace fog
         Matrix scaledMat = mat / scale;
         
         Vector eigenvalues;
-        computeRoots (scaledMat, eigenvalues);
+        pcl::computeRoots (scaledMat, eigenvalues);
         
         eigenvalue = eigenvalues (0) * scale;
         
@@ -661,6 +760,9 @@ namespace fog
         accu [7] = cv::sum(y)[0];
         accu [8] = cv::sum(z)[0];
 
+        std::size_t point_count = x.total();        
+        accu /= static_cast<Scalar> (point_count);
+
         //Eigen::Vector3f vec = accu.tail<3> ();
         //centroid.head<3> () = vec;//= accu.tail<3> ();
         //centroid.head<3> () = accu.tail<3> ();    -- does not compile with Clang 3.0
@@ -676,7 +778,6 @@ namespace fog
         covariance_matrix.coeffRef (6) = covariance_matrix.coeff (2);
         covariance_matrix.coeffRef (7) = covariance_matrix.coeff (5);
         
-        int point_count = x.total();
 
         return (static_cast<unsigned int> (point_count));
     }
@@ -696,7 +797,7 @@ namespace fog
     // Extract the smallest eigenvalue and its eigenvector
     EIGEN_ALIGN16 Eigen::Vector3f::Scalar eigen_value;
     EIGEN_ALIGN16 Eigen::Vector3f eigen_vector;
-    pcl::eigen33(covariance_matrix, eigen_value, eigen_vector);
+    eigen33(covariance_matrix, eigen_value, eigen_vector);
     
     nx = eigen_vector [0];
     ny = eigen_vector [1];
