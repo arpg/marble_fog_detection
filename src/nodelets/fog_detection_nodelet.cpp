@@ -226,8 +226,10 @@ namespace fog
             float max_dist = 0;
             float last_dist = 0;
 
-            for (int u = 0; u < H; u++) {
-                for (int v = 0; v < W; v++) {
+            for (int u = 0; u < H; u++)
+            {
+                for (int v = 0; v < W; v++)
+                {
                     const size_t vv = (v + px_offset[u]) % W;
                     const size_t index = vv * H + u;
                     const auto& pt = cloud_in[index];
@@ -253,6 +255,47 @@ namespace fog
                     img_n.at<float>(u,v) = pt.noise;
                 }
             }
+
+            ///////////////////////
+            // COMPUTE GRADIENTS //
+            ///////////////////////
+
+            cv::Mat dx_dx(H, W, CV_32FC1, 0.0);
+            cv::Mat dy_dx(H, W, CV_32FC1, 0.0);
+            cv::Mat dz_dx(H, W, CV_32FC1, 0.0);
+            cv::Mat dx_dy(H, W, CV_32FC1, 0.0);
+            cv::Mat dy_dy(H, W, CV_32FC1, 0.0);
+            cv::Mat dz_dy(H, W, CV_32FC1, 0.0);
+            cv::Mat norm_x(H, W, CV_32FC1, 0.0);
+            cv::Mat norm_y(H, W, CV_32FC1, 0.0);
+            cv::Mat norm_z(H, W, CV_32FC1, 0.0);
+
+            std::cout << dx_dx.total() << std::endl;
+
+            dx_dx = img_x.colRange(0, W-1) - img_x.colRange(1, W);
+            dy_dx = img_y.colRange(0, W-1) - img_y.colRange(1, W);
+            dz_dx = img_z.colRange(0, W-1) - img_z.colRange(1, W);
+            dx_dy = img_x.rowRange(0, H-1) - img_x.rowRange(1, H);
+            dy_dy = img_y.rowRange(0, H-1) - img_y.rowRange(1, H);
+            dz_dy = img_z.rowRange(0, H-1) - img_z.rowRange(1, H);
+
+            cv::Mat zero_row(1, W, CV_32FC1, 0.0);
+            cv::Mat zero_col(H, 1, CV_32FC1, 0.0);
+
+            cv::hconcat(dx_dx, zero_col, dx_dx);
+            cv::hconcat(dy_dx, zero_col, dy_dx);
+            cv::hconcat(dz_dx, zero_col, dz_dx);
+
+            cv::vconcat(dx_dy, zero_row, dx_dy);
+            cv::vconcat(dy_dy, zero_row, dy_dy);
+            cv::vconcat(dz_dy, zero_row, dz_dy);
+
+            std::cout << dx_dx.total() << std::endl;
+
+            // Cross product
+            norm_x = dy_dx.mul(dz_dy) - dz_dx.mul(dy_dy);
+            norm_y = dz_dx.mul(dx_dy) - dx_dx.mul(dz_dy);
+            norm_z = dx_dx.mul(dy_dy) - dy_dx.mul(dx_dy);
 
             ////////////////////////////
             // INTENSITY FILTER (PCL) //
