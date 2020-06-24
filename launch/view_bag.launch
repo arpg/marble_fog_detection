@@ -3,7 +3,7 @@
   <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="imu2imurot" args="0 0 0 3.14159 0 0 body_aligned_imu_link body_aligned_imu_nk_rotated"/>
   <node pkg="tf2_ros" type="static_transform_publisher" name="ouster2body" args="0 0 0 3.14159 0 0 os1_sensor os1_lidar"/> -->
 
-  <arg name="start_time" default="0" />
+  <arg name="start_time" default="950" />
   <arg name="rate" default="1.0" /> <!-- normal_pcl can only run at 0.08 or slower -->
 
   <arg name="bags" default=
