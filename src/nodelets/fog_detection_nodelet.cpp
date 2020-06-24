@@ -266,6 +266,9 @@ namespace fog
             cv::Mat dx_dy(H, W, CV_32FC1, 0.0);
             cv::Mat dy_dy(H, W, CV_32FC1, 0.0);
             cv::Mat dz_dy(H, W, CV_32FC1, 0.0);
+            cv::Mat mag_dx(H, W, CV_32FC1, 0.0);
+            cv::Mat mag_dy(H, W, CV_32FC1, 0.0);
+            cv::Mat mag_dxdy(H, W, CV_32FC1, 0.0);
             cv::Mat norm_x(H, W, CV_32FC1, 0.0);
             cv::Mat norm_y(H, W, CV_32FC1, 0.0);
             cv::Mat norm_z(H, W, CV_32FC1, 0.0);
@@ -275,95 +278,38 @@ namespace fog
             dx_dx = img_x.colRange(0, W-1) - img_x.colRange(1, W);
             dy_dx = img_y.colRange(0, W-1) - img_y.colRange(1, W);
             dz_dx = img_z.colRange(0, W-1) - img_z.colRange(1, W);
+
             dx_dy = img_x.rowRange(0, H-1) - img_x.rowRange(1, H);
             dy_dy = img_y.rowRange(0, H-1) - img_y.rowRange(1, H);
             dz_dy = img_z.rowRange(0, H-1) - img_z.rowRange(1, H);
 
+            mag_dx = dx_dx.mul(dx_dx) + dy_dx.mul(dy_dx) + dz_dx.mul(dz_dx);
+            mag_dy = dx_dy.mul(dx_dy) + dy_dy.mul(dy_dy) + dz_dy.mul(dz_dy);
+            cv::Mat  one_row(1, W, CV_32FC1, 1.0);
+            cv::Mat  one_col(H, 1, CV_32FC1, 1.0);
+            cv::hconcat(mag_dx, one_col, mag_dx);
+            cv::vconcat(mag_dy, one_row, mag_dy);
+            mag_dxdy = mag_dx.mul(mag_dy);
+            cv::sqrt(mag_dxdy, mag_dxdy);
+
             cv::Mat zero_row(1, W, CV_32FC1, 0.0);
             cv::Mat zero_col(H, 1, CV_32FC1, 0.0);
-
             cv::hconcat(dx_dx, zero_col, dx_dx);
             cv::hconcat(dy_dx, zero_col, dy_dx);
             cv::hconcat(dz_dx, zero_col, dz_dx);
-
             cv::vconcat(dx_dy, zero_row, dx_dy);
             cv::vconcat(dy_dy, zero_row, dy_dy);
             cv::vconcat(dz_dy, zero_row, dz_dy);
-
-            std::cout << dx_dx.total() << std::endl;
 
             // Cross product
             norm_x = dy_dx.mul(dz_dy) - dz_dx.mul(dy_dy);
             norm_y = dz_dx.mul(dx_dy) - dx_dx.mul(dz_dy);
             norm_z = dx_dx.mul(dy_dy) - dy_dx.mul(dx_dy);
 
-            ////////////////////////////
-            // INTENSITY FILTER (PCL) //
-            ////////////////////////////
-
-            cv::threshold(intensity_img, intensity_filter_img, 100.0, 1.0, THRESH_BINARY_INV);
-
-            // Intensity Filter
-            pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-            pcl::ExtractIndices<pcl::PointXYZI> extract;
-
-            for (int u = 0; u < H; u++)
-            {
-                for (int v = 0; v < W; v++)
-                {
-                    if(intensity_filter_img.at<float>(u,v) > 0.1)
-                    {
-                        const size_t vv = (v + px_offset[u]) % W;
-                        const size_t i = vv * H + u;
-                        inliers->indices.push_back(i);
-                    }
-                }
-            }
-
-            extract.setInputCloud(cloud_in2);
-            extract.setIndices(inliers);
-            extract.setNegative(false);
-            pcl::PointCloud<pcl::PointXYZI>::Ptr output(new pcl::PointCloud<pcl::PointXYZI>);
-            extract.filter(*output);
-
-            output->width = output->points.size ();
-            output->height = 1;
-            output->is_dense = true;
-            output->header.seq = seq;
-            output->header.frame_id = cloud_in2->header.frame_id;
-            pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
-            pub_intensity_filter_pcl_.publish (output);
-            
-            // Test Filter
-            pcl::PointIndices::Ptr test_pcl(new pcl::PointIndices());
-            pcl::ExtractIndices<pcl::PointXYZI> test_extract;
-
-            for (int u = 0; u < H; u++)
-            {
-                for (int v = 0; v < W; v++)
-                {
-                    if(img_x.at<float>(u,v) > 0.0)
-                    {
-                        const size_t vv = (v + px_offset[u]) % W;
-                        const size_t i = vv * H + u;
-                        test_pcl->indices.push_back(i);
-                    }
-                }
-            }
-
-            test_extract.setInputCloud(cloud_in2);
-            test_extract.setIndices(test_pcl);
-            test_extract.setNegative(false);
-            pcl::PointCloud<pcl::PointXYZI>::Ptr test_output(new pcl::PointCloud<pcl::PointXYZI>);
-            test_extract.filter(*test_output);
-      
-            test_output->width = test_output->points.size ();
-            test_output->height = 1;
-            test_output->is_dense = true;
-            test_output->header.seq = seq;
-            test_output->header.frame_id = cloud_in2->header.frame_id;
-            pcl_conversions::toPCL(ros::Time::now(), test_output->header.stamp);
-            pub_test_pcl_.publish (test_output);
+            // Normalize output
+            cv::divide(norm_x, mag_dxdy, norm_x, 1);
+            cv::divide(norm_y, mag_dxdy, norm_y, 1);
+            cv::divide(norm_z, mag_dxdy, norm_z, 1);
 
             // Publish Range Image
             cv_bridge::CvImage new_range_msg;
@@ -569,21 +515,25 @@ namespace fog
                 cloud_norm->height = cloud_in.height;
                 cloud_norm->resize(cloud_norm->height*cloud_norm->width);
                 
+                // Fog Filter
+                pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
+                pcl::ExtractIndices<pcl::PointXYZINormal> extract;
+
                 // Assign original xyz data to normal estimate cloud (this is necessary because by default the xyz fields are empty)
 
                 for (int u = 0; u < H - roi.height; u++)
                 {
                     for (int v = 0; v < W - roi.width; v++)
                     {
-                        roi.y = u;
-                        roi.x = v;
-                        x = img_x(roi);
-                        y = img_y(roi);
-                        z = img_z(roi);
-                        computePointNormal(x,
-                                           y,
-                                           z,
-                                           nx, ny, nz, curvature);
+                        // roi.y = u;
+                        // roi.x = v;
+                        // x = img_x(roi);
+                        // y = img_y(roi);
+                        // z = img_z(roi);
+                        // computePointNormal(x,
+                        //                    y,
+                        //                    z,
+                        //                    nx, ny, nz, curvature);
 
                         // // Placeholder for the 3x3 covariance matrix at each surface patch
                         // EIGEN_ALIGN16 Eigen::Matrix3f covariance_matrix_;
@@ -606,9 +556,25 @@ namespace fog
                         cloud_norm->points[index].y = pt.y;
                         cloud_norm->points[index].z = pt.z;
                         cloud_norm->points[index].intensity = pt.intensity;
-                        cloud_norm->points[index].normal_x = nx;
-                        cloud_norm->points[index].normal_y = ny;
-                        cloud_norm->points[index].normal_z = nz;
+                        cloud_norm->points[index].normal_x = norm_x.at<float>(u,v);
+                        cloud_norm->points[index].normal_y = norm_y.at<float>(u,v);
+                        cloud_norm->points[index].normal_z = norm_z.at<float>(u,v);
+
+                        if (last_range_img.total() > 0)
+                        {
+                            if (range_img.at<float>(u,v) != 0 && last_range_img.at<float>(u,v) != 0)
+                            {
+                                cloud_norm->points[index].normal_y = range_img.at<float>(u,v) - last_range_img.at<float>(u,v);
+                            }
+                            else
+                            {
+                                cloud_norm->points[index].normal_y = 0;
+                            }
+                        }
+                        if (cloud_norm->points[index].intensity < 80 && cloud_norm->points[index].normal_y < -0.5)
+                        {
+                            inliers->indices.push_back(index);
+                        }
 
                         // std::cout << "x: " << x << std::endl;
                         // std::cout << "y: " << y << std::endl;
@@ -620,13 +586,85 @@ namespace fog
                     }
                 }
 
-            // cloud_norm->width = cloud_norm->points.size ();
-            // cloud_norm->height = 1;
-            cloud_norm->is_dense = true;
-            cloud_norm->header.seq = seq;
-            cloud_norm->header.frame_id = cloud_in2->header.frame_id;
-            pcl_conversions::toPCL(ros::Time::now(), cloud_norm->header.stamp);
-            pub_normal2_pcl_.publish (cloud_norm);
+                // cloud_norm->width = cloud_norm->points.size ();
+                // cloud_norm->height = 1;
+                cloud_norm->is_dense = true;
+                cloud_norm->header.seq = seq;
+                cloud_norm->header.frame_id = cloud_in2->header.frame_id;
+                pcl_conversions::toPCL(ros::Time::now(), cloud_norm->header.stamp);
+                pub_normal2_pcl_.publish (cloud_norm);
+
+
+                ////////////////////////////
+                // INTENSITY FILTER (PCL) //
+                ////////////////////////////
+
+                // cv::threshold(intensity_img, intensity_filter_img, 100.0, 1.0, THRESH_BINARY_INV);
+
+                // // Intensity Filter
+                // pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
+                // pcl::ExtractIndices<pcl::PointXYZI> extract;
+
+                // for (int u = 0; u < H; u++)
+                // {
+                //     for (int v = 0; v < W; v++)
+                //     {
+                //         if(intensity_filter_img.at<float>(u,v) > 0.1)
+                //         {
+                //             const size_t vv = (v + px_offset[u]) % W;
+                //             const size_t i = vv * H + u;
+                //             inliers->indices.push_back(i);
+                //         }
+                //     }
+                // }
+
+                extract.setInputCloud(cloud_norm);
+                extract.setIndices(inliers);
+                extract.setNegative(false);
+                pcl::PointCloud<pcl::PointXYZINormal>::Ptr output(new pcl::PointCloud<pcl::PointXYZINormal>);
+                extract.filter(*output);
+
+                output->width = output->points.size ();
+                output->height = 1;
+                output->is_dense = true;
+                output->header.seq = seq;
+                output->header.frame_id = cloud_in2->header.frame_id;
+                pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
+                pub_intensity_filter_pcl_.publish (output);
+                
+                // Test Filter
+                pcl::PointIndices::Ptr test_pcl(new pcl::PointIndices());
+                pcl::ExtractIndices<pcl::PointXYZI> test_extract;
+
+                for (int u = 0; u < H; u++)
+                {
+                    for (int v = 0; v < W; v++)
+                    {
+                        if(img_x.at<float>(u,v) > 0.0)
+                        {
+                            const size_t vv = (v + px_offset[u]) % W;
+                            const size_t i = vv * H + u;
+                            test_pcl->indices.push_back(i);
+                        }
+                    }
+                }
+
+                test_extract.setInputCloud(cloud_in2);
+                test_extract.setIndices(test_pcl);
+                test_extract.setNegative(false);
+                pcl::PointCloud<pcl::PointXYZI>::Ptr test_output(new pcl::PointCloud<pcl::PointXYZI>);
+                test_extract.filter(*test_output);
+        
+                test_output->width = test_output->points.size ();
+                test_output->height = 1;
+                test_output->is_dense = true;
+                test_output->header.seq = seq;
+                test_output->header.frame_id = cloud_in2->header.frame_id;
+                pcl_conversions::toPCL(ros::Time::now(), test_output->header.stamp);
+                pub_test_pcl_.publish (test_output);
+
+
+                last_range_img = range_img;
 
             }
 

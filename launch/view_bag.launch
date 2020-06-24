@@ -3,27 +3,43 @@
   <!-- <node pkg="tf2_ros" type="static_transform_publisher" name="imu2imurot" args="0 0 0 3.14159 0 0 body_aligned_imu_link body_aligned_imu_nk_rotated"/>
   <node pkg="tf2_ros" type="static_transform_publisher" name="ouster2body" args="0 0 0 3.14159 0 0 os1_sensor os1_lidar"/> -->
 
-  <arg name="rviz_dir" default="/home/erush91/catkin_ws/src/fog_detection/rviz/" />
-  <arg name="rviz_file" default="H01_urban.rviz" />
-
-  <arg name="bag_dir" default="/media/erush91/4D28ADA963CE7750/SATSOP/URBAN_DEPLOYMENT_2_BETA/URBAN_DEPLOYMENT_2_BETA_H01/" />
-  <arg name="bag_file1" default="outputs_2020-02-22-12-30-23_0-002.bag" />
-  <arg name="bag_file2" default="outputs_2020-02-22-12-50-23_1-003.bag" />
-  <arg name="bag_file3" default="outputs_2020-02-22-13-10-24_2-001.bag" />
-  <arg name="bag_file4" default="sensor_data_2020-02-22-12-30-23_0.bag" />
-  <arg name="bag_file5" default="sensor_data_2020-02-22-12-50-24_1.bag" />
-  <arg name="bag_file6" default="sensor_data_2020-02-22-13-10-24_2.bag" />
-
   <arg name="start_time" default="0" />
-  <arg name="rate" default="0.25" />
+  <arg name="rate" default="1.0" /> <!-- normal_pcl can only run at 0.08 or slower -->
 
+  <arg name="bags" default=
+    "/home/erush91/data/NIOSH/TUNNEL_DEPLOYMENT_3/H02/camera_fwd_rgb_full.bag
+     /home/erush91/data/NIOSH/TUNNEL_DEPLOYMENT_3/H02/imu_ouster_2019-08-20-14-02-24_full.bag
+     /home/erush91/data/NIOSH/TUNNEL_DEPLOYMENT_3/H02/outputs_2019-08-20-14-02-24_full.bag">
+  </arg>
+
+  <!-- /home/erush91/data/radar/fog_garage_artifacts_0.bag -->
+
+  <!-- /home/erush91/data/ouster/fog/fog_ouster_garage_2020-03-31-14-47-44.bag -->
+
+  <!-- /media/erush91/4D28ADA963CE7750/SATSOP/URBAN_DEPLOYMENT_2_BETA/URBAN_DEPLOYMENT_2_BETA_H01/outputs_2020-02-22-12-30-23_0-002.bag
+  /media/erush91/4D28ADA963CE7750/SATSOP/URBAN_DEPLOYMENT_2_BETA/URBAN_DEPLOYMENT_2_BETA_H01/outputs_2020-02-22-12-50-23_1-003.bag
+  /media/erush91/4D28ADA963CE7750/SATSOP/URBAN_DEPLOYMENT_2_BETA/URBAN_DEPLOYMENT_2_BETA_H01/outputs_2020-02-22-13-10-24_2-001.bag
+  /media/erush91/4D28ADA963CE7750/SATSOP/URBAN_DEPLOYMENT_2_BETA/URBAN_DEPLOYMENT_2_BETA_H01/sensor_data_2020-02-22-12-30-23_0.bag
+  /media/erush91/4D28ADA963CE7750/SATSOP/URBAN_DEPLOYMENT_2_BETA/URBAN_DEPLOYMENT_2_BETA_H01/sensor_data_2020-02-22-12-50-24_1.bag
+  /media/erush91/4D28ADA963CE7750/SATSOP/URBAN_DEPLOYMENT_2_BETA/URBAN_DEPLOYMENT_2_BETA_H01/sensor_data_2020-02-22-13-10-24_2.bag -->
+
+  <arg name="viz" default=
+    "/home/erush91/catkin_ws/src/fog_detection/rviz/H02_NIOSH.rviz">
+  </arg>
+  
+    <!-- "/home/erush91/catkin_ws/src/fog_detection/rviz/fog_garage.rviz"> -->
+    <!-- "/home/erush91/catkin_ws/src/fog_detection/rviz/H02_NIOSH.rviz"> -->
+    <!-- "/home/erush91/catkin_ws/src/fog_detection/rviz/H01_urban.rviz"> -->
+  
   <rosparam>
-    use_system_time: True
+    use_sim_time: True
+    <!-- use_system_time: True -->
   </rosparam>
 
-  <node pkg="rviz" type="rviz" name="rviz" args="-d $(arg rviz_dir)$(arg rviz_file)" />
+  <node pkg="rviz" type="rviz" name="rviz" args="-d $(arg viz)" />
   <node pkg="rosbag" type="play" name="player" args="--clock --pause -s $(arg start_time) -r $(arg rate)
-            $(arg bag_dir)$(arg bag_file1) $(arg bag_dir)$(arg bag_file2) $(arg bag_dir)$(arg bag_file3) 
-            $(arg bag_dir)$(arg bag_file4) $(arg bag_dir)$(arg bag_file5) $(arg bag_dir)$(arg bag_file6)" output="screen" />
+            $(arg bags)" output="screen" />
+
+  <include file="$(find fog_detection)/launch/fog_detection.launch" />
 
 </launch>
