@@ -86,7 +86,20 @@
 using namespace std::chrono; 
 
 #include <Eigen/Core>
-#include <Eigen/Eigenvalues> 
+#include <Eigen/Eigenvalues>
+
+// using namespace std;
+
+// #include <pcl/common/time.h>
+
+// using namespace pcl;
+
+#include <pcl/octree/octree.h>
+#include <pcl/octree/octree_impl.h>
+#include <pcl/octree/octree_pointcloud_adjacency.h>
+
+// using namespace octree;
+
 
 
 
@@ -245,6 +258,9 @@ namespace fog
       float ror_radius_;
       float ror_min_neighbors_;
       float height_variance_radius_;
+      float octree_min_count_;
+      float octree_max_count_;
+      float octree_resolution_;
 
       cv::Mat last_intensity_img;
       cv::Mat last_range_img;

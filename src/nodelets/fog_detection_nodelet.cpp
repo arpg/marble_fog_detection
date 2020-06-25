@@ -106,6 +106,10 @@ namespace fog
         ror_radius_                 = config.ror_radius;
         ror_min_neighbors_          = config.ror_min_neighbors;
 
+        octree_min_count_           = config.octree_min_count;
+        octree_max_count_           = config.octree_max_count;
+        octree_resolution_          = config.octree_resolution;
+
     };
 
     void FogDetectionNodelet::range_image_cb(const sensor_msgs::ImageConstPtr& image_msg)
@@ -142,6 +146,56 @@ namespace fog
             {
                 range_pcl = 1;
             }
+        }
+
+
+        if(range_pcl == 0)
+        {
+            pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZ>);
+            pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
+
+            pcl::octree::OctreePointCloudDensity<pcl::PointXYZ> octreeA (octree_resolution_); // low resolution
+
+            octreeA.defineBoundingBox (-5.0, -5.0, -5.0, 5.0, 5.0, 5.0);
+
+            // add point data to octree
+            octreeA.setInputCloud (cloud_in2);
+            
+            octreeA.addPointsFromInputCloud ();
+
+            pcl::PointCloud<pcl::PointXYZI>::Ptr test_output(new pcl::PointCloud<pcl::PointXYZI>);
+
+            // 
+            // check density information
+            for (float z = -5.0f; z < 5.0f; z += octree_resolution_)
+            {
+                for (float y = -5.0f; y < 5.0f; y += octree_resolution_)
+                {
+                    for (float x = -5.0f; x < 5.0f; x += octree_resolution_)
+                    {
+
+                        long int count = octreeA.getVoxelDensityAtPoint(pcl::PointXYZ(x, y, z));
+                        if(count > octree_min_count_ && count < octree_max_count_)
+                        {
+                            pcl::PointXYZI*pt=new pcl::PointXYZI();
+                            pt->x = x + 0.5 * octree_resolution_;
+                            pt->y = y + 0.5 * octree_resolution_;
+                            pt->z = z + 0.5 * octree_resolution_;
+                            pt->intensity = count;
+                            test_output->push_back(*pt);
+                        }
+                    }
+                }
+            }
+                
+            test_output->width = test_output->points.size ();
+            test_output->height = 1;
+            test_output->is_dense = true;
+            test_output->header.seq = seq;
+            test_output->header.frame_id = cloud_in2->header.frame_id;
+            pcl_conversions::toPCL(ros::Time::now(), test_output->header.stamp);
+            pub_test_pcl_.publish (test_output);
+
         }
 
         if(range_pcl == 1)
