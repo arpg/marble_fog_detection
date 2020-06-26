@@ -517,10 +517,10 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 12.579766273498535
+      Max Intensity: 22.035018920898438
       Min Color: 0; 0; 0
       Min Intensity: 0
       Name: Assembled PCL
@@ -534,7 +534,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -547,7 +547,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: ""
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Max Intensity: 4096
@@ -564,7 +564,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -577,12 +577,12 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: Intensity
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: -999999
+      Max Intensity: 0.9357426166534424
       Min Color: 0; 0; 0
-      Min Intensity: 999999
+      Min Intensity: 0.058365754783153534
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
@@ -594,7 +594,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 0.5
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -610,9 +610,9 @@ Visualization Manager:
       Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
-      Max Intensity: 977
+      Max Intensity: 9
       Min Color: 0; 0; 0
-      Min Intensity: 1
+      Min Intensity: 3
       Name: PointCloud2
       Position Transformer: XYZ
       Queue Size: 10
@@ -653,7 +653,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 1.4310288429260254
+      Distance: 4.9779052734375
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -668,10 +668,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.36479806900024414
+      Pitch: 0.5847978591918945
       Target Frame: imu_viz_link
       Value: Orbit (rviz)
-      Yaw: 3.327260732650757
+      Yaw: 2.8272571563720703
     Saved: ~
 Window Geometry:
   Color Image:

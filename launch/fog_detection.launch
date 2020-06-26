@@ -12,7 +12,7 @@
     <node pkg="nodelet" type="nodelet" name="fog_detection" args="load fog/fog_detection_nodelet standalone_nodelet" output="screen">
         <remap from="in_range_img"          to="/img_node/range_image" />
         <remap from="in_intensity_img"      to="/img_node/intensity_image" />
-        <remap from="in_pcl"                to="/os1_cloud_node/points" />
+        <remap from="in_pcl"                to="/assembled_cloud" />
         <rosparam>
             k_search:                 0.00
             radius_search:            0.00

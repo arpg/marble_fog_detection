@@ -60,6 +60,10 @@ namespace fog
         // Create static tf broadcaster (-30 pitch, Realsense pointed down)
         // rosrun tf static_transform_publisher 0.0 0.0 0.0 0.0 -0.00913852259 0.0 base_link royale_camera_optical_frame 1000
 
+        ros::Duration tfCacheDuration;
+        tfCacheDuration = tfCacheDuration.fromSec(60);   // ten minute tf buffer!
+        tf_listener = new tf::TransformListener(tfCacheDuration);
+
         try
         {
             low_listener.waitForTransform(low_sensor_frame, low_robot_frame, ros::Time(0), ros::Duration(10.0) );
@@ -152,14 +156,42 @@ namespace fog
         if(range_pcl == 0)
         {
             pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZ>);
+            pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in2_xfrm (new pcl::PointCloud<pcl::PointXYZ>);
+            
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
+
+            try
+            {
+                // tf_listener->lookupTransform("/map", "/ouster_link", cloud_in_ros->header.stamp, sensorToWorldTf);
+                // sensorToWorldTf.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
+                // tf::Matrix3x3 euler;
+                // euler.setRotation(sensorToWorldTf.getRotation());
+                // double roll;
+                // double pitch;
+                // double yaw;
+                // int solution_number = 1;
+                // euler.getEulerYPR(yaw, pitch, roll, solution_number);
+                // std::cout << "rpy: " << yaw << ", " << pitch << ", " << roll << std::endl;
+                tf::StampedTransform sensorToWorldTf;
+                std::string frame = "ouster_link";
+                sensor_msgs::PointCloud2 buffer_local;
+                pcl_ros::transformPointCloud(frame, *cloud_in2, *cloud_in2_xfrm, *tf_listener);
+            }
+            catch(tf::TransformException& ex)
+            {
+                ROS_ERROR_STREAM( "Transform error of sensor data: " << ex.what() << ", quitting callback");
+                return;
+            }
+
+            std::cout << "TESTING_END " << std::endl;
+
 
             pcl::octree::OctreePointCloudDensity<pcl::PointXYZ> octreeA (octree_resolution_); // low resolution
 
             octreeA.defineBoundingBox (-5.0, -5.0, -5.0, 5.0, 5.0, 5.0);
 
             // add point data to octree
-            octreeA.setInputCloud (cloud_in2);
+            octreeA.setInputCloud (cloud_in2_xfrm);
             
             octreeA.addPointsFromInputCloud ();
 
@@ -192,7 +224,7 @@ namespace fog
             test_output->height = 1;
             test_output->is_dense = true;
             test_output->header.seq = seq;
-            test_output->header.frame_id = cloud_in2->header.frame_id;
+            test_output->header.frame_id = "ouster_link"; //cloud_in2->header.frame_id;
             pcl_conversions::toPCL(ros::Time::now(), test_output->header.stamp);
             pub_test_pcl_.publish (test_output);
 

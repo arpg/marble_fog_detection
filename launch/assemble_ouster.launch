@@ -10,13 +10,13 @@
     <arg name="assemble" default="velodyne_points"/> 
 
     <node type="point_cloud2_assembler" pkg="laser_assembler"  name="pcl_assembler_server">
-        <remap from="cloud" to="os1_cloud_node/points"/> <!-- os1_cloud_node/points -->
+        <remap from="cloud" to="/H02/ouster_driver/points"/> <!-- os1_cloud_node/points -->
         <param name="max_clouds" type="int" value="100" />
         <param name="fixed_frame" type="string" value="map" /> <!-- os1_lidar -->
     </node>
 
     <node name="pcl_assembler_client" pkg="spin_lidar" type="pcl_assembler_client" output="screen" >
-        <remap from="cloud" to="/os1_cloud_node/points"/> <!-- os1_cloud_node/points -->
+        <remap from="cloud" to="/H02/ouster_driver/points"/> <!-- os1_cloud_node/points -->
         <param name="assembly_duration_seconds" type="double" value="5.0" />
     </node>
 

@@ -278,6 +278,8 @@ namespace fog
       pcl::search::Search<pcl::PointXYZ>::Ptr tree_xyz;
       typedef pcl::PointCloud<pcl::PointXYZINormal> PointCloudOut;
 
+      tf::TransformListener* tf_listener;
+
   };
 
 };
