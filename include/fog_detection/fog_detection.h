@@ -194,6 +194,7 @@ namespace fog
       float ror_radius_;
       float ror_min_neighbors_;
       float height_variance_radius_;
+      float min_range_deviation_;
 
       cv::Mat last_intensity_img;
       cv::Mat last_range_img;

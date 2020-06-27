@@ -100,6 +100,7 @@ namespace fog
         normal_z_GT_threshold_      = config.normal_z_GT_threshold;
         ror_radius_                 = config.ror_radius;
         ror_min_neighbors_          = config.ror_min_neighbors;
+        min_range_deviation_        = config.min_range_deviation;
 
     };
 
@@ -511,7 +512,7 @@ namespace fog
 
             // Extract PCL Indices
             cv::Mat filter_img(H, W, CV_32FC1, 0.0);
-            cv::threshold(filtered_img, filter_img, 0.50, 1.0, THRESH_TOZERO); // dev_diff_range_img
+            cv::threshold(filtered_img, filter_img, min_range_deviation_, 1.0, THRESH_TOZERO); // dev_diff_range_img
             
             // // Try to publish half of the point cloud
             pcl::PointIndices::Ptr inliers(new pcl::PointIndices());

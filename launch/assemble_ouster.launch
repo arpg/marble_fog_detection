@@ -1,0 +1,23 @@
+<launch>
+
+    <!-- Tunnel UGV -->
+	<!-- <node pkg="tf2_ros" type="static_transform_publisher" name="ouster2body" args="0 0 -0.1143 3.14159 0 3.14159 base_link ouster_link"/> -->
+
+    <!-- Urban UGV -->
+	<!-- <node pkg="tf2_ros" type="static_transform_publisher" name="ouster2body" args="0 0 0 3.14159 0 0 body_aligned_imu_link os1_lidar"/> -->
+
+    <param name="assembled_cloud_mode" type="string" value="subscriber" />
+    <arg name="assemble" default="velodyne_points"/> 
+
+    <node type="point_cloud2_assembler" pkg="laser_assembler"  name="pcl_assembler_server">
+        <remap from="cloud" to="/fog_detection/out_conf_pcl"/> <!-- os1_cloud_node/points -->
+        <param name="max_clouds" type="int" value="100" />
+        <param name="fixed_frame" type="string" value="map" /> <!-- os1_lidar -->
+    </node>
+
+    <node name="pcl_assembler_client" pkg="spin_lidar" type="pcl_assembler_client" output="screen" >
+        <remap from="cloud" to="/fog_detection/out_conf_pcl"/> <!-- os1_cloud_node/points -->
+        <param name="assembly_duration_seconds" type="double" value="5.0" />
+    </node>
+
+</launch>
