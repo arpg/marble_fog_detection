@@ -1,18 +1,18 @@
 <launch>
 
     <!-- <arg name="input_topic" default="/H02/ouster_driver/points" /> -->
-    <arg name="input_topic" default="/assembled_cloud" />
+    <!-- <arg name="input_topic" default="/assembled_cloud" />
 
     <include file="$(find fog_detection)/launch/voxel_grid.launch" >
         <arg name="input_topic" value="$(arg input_topic)"/>
-    </include>
+    </include> -->
 
     <node pkg="nodelet" type="nodelet" name="standalone_nodelet" args="manager" output="screen" />
     
     <node pkg="nodelet" type="nodelet" name="fog_detection" args="load fog/fog_detection_nodelet standalone_nodelet" output="screen">
         <remap from="in_range_img"          to="/img_node/range_image" />
         <remap from="in_intensity_img"      to="/img_node/intensity_image" />
-        <remap from="in_pcl"                to="/assembled_cloud" />
+        <remap from="in_pcl"                to="/H02/ouster_driver/points" />
         <rosparam>
             k_search:                 0.00
             radius_search:            0.00

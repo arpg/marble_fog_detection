@@ -1,0 +1,24 @@
+<!--
+  Example launch file for octomap_server mapping:
+  Listens to incoming PointCloud2 data and incrementally builds an octomap.
+  The data is sent out in different representations.
+
+  Copy this file into your workspace and adjust as needed, see
+  www.ros.org/wiki/octomap_server for details
+-->
+<launch>
+    <arg name="resolution"            default="0.2"/>
+    <arg name="range"                 default="5.0"/>
+
+    <node pkg="octomap_server" type="octomap_server_node" name="octomap_server">
+        <param name="frame_id"                  value="world" />
+        <param name="resolution"                value="0.2" />
+        <param name="sensor_model/max_range"    value="5.0" />
+        <param name="sensor_model/hit"          value="0.95" />
+        <param name="sensor_model/miss"         value="0.45" />
+        <param name="sensor_model/min"          value="0.12" />
+        <param name="sensor_model/max"          value="0.97" />
+        <remap from="cloud_in"                  to="/H02/ouster_driver/points" />
+    </node>
+
+</launch>

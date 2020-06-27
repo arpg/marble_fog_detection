@@ -240,6 +240,7 @@ namespace fog
 
       // Point Cloud Sequence
       long int seq = 0;
+      long int cnt_callback = 0;
 
       float transform_pcl_roll_;
       float transform_pcl_pitch_;
@@ -279,6 +280,11 @@ namespace fog
       typedef pcl::PointCloud<pcl::PointXYZINormal> PointCloudOut;
 
       tf::TransformListener* tf_listener;
+
+      float res = 0.5;
+      // http://www.pcl-users.org/Using-OctreePointCloudSearch-class-as-a-member-class-for-my-own-object-problems-initiating-octree-ine-td4032698.html
+      // http://www.pcl-users.org/octree-instantiation-td3033421.html
+      pcl::octree::OctreePointCloudDensity<pcl::PointXYZ> *octreeA; // low resolution
 
   };
 
