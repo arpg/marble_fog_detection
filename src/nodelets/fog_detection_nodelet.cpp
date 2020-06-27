@@ -172,62 +172,71 @@ namespace fog
                 // int solution_number = 1;
                 // euler.getEulerYPR(yaw, pitch, roll, solution_number);
                 // std::cout << "rpy: " << yaw << ", " << pitch << ", " << roll << std::endl;
-                tf::StampedTransform sensorToWorldTf;
+                // tf::StampedTransform sensorToWorldTf;
                 std::string frame = "ouster_link";
                 sensor_msgs::PointCloud2 buffer_local;
                 pcl_ros::transformPointCloud(frame, *cloud_in2, *cloud_in2_xfrm, *tf_listener);
+
+
+                std::cout << "TESTING_END " << std::endl;
+
+                pcl::octree::OctreePointCloudDensityContainer cont;
+                pcl::octree::OctreePointCloudDensity<pcl::PointXYZ> octreeA (octree_resolution_); // low resolution
+
+
+                // pcl::octree::OctreePointCloud<pcl::PointXYZ> *p_octreeA;
+                // p_octreeA->reset(new octreeA);
+                // p_octreeA->setInputCloud(map_points);
+
+                octreeA.defineBoundingBox(-5.25, -5.25, -5.25, 5.25, 5.25, 5.25);
+
+                // add point data to octree
+                octreeA.setInputCloud(cloud_in2_xfrm);
+                
+                octreeA.addPointsFromInputCloud();
+                // cont->setData(octreeA);
+                pcl::PointCloud<pcl::PointXYZI>::Ptr test_output(new pcl::PointCloud<pcl::PointXYZI>);
+
+                // 
+                // check density information
+                for (float z = -5.0f; z <= 5.0f; z += octree_resolution_)
+                {
+                    for (float y = -5.0f; y <= 5.0f; y += octree_resolution_)
+                    {
+                        for (float x = -5.0f; x <= 5.0f; x += octree_resolution_)
+                        {
+                            long int count = octreeA.getVoxelDensityAtPoint(pcl::PointXYZ(x, y, z));
+                            if(count >= octree_min_count_ && count <= octree_max_count_)
+                            {
+                                pcl::PointXYZI*pt=new pcl::PointXYZI();
+                                pt->x = x;
+                                pt->y = y;
+                                pt->z = z;
+                                pt->intensity = count;
+                                test_output->push_back(*pt);
+                            }
+                        }
+                    }
+                }
+                    
+                test_output->width = test_output->points.size ();
+                test_output->height = 1;
+                test_output->is_dense = true;
+                test_output->header.seq = seq;
+                test_output->header.frame_id = "ouster_link"; //cloud_in2->header.frame_id;
+                pcl_conversions::toPCL(ros::Time::now(), test_output->header.stamp);
+                pub_test_pcl_.publish (test_output);
+
+                test_output->clear();
+                cloud_in2->clear();
+                cloud_in2_xfrm->clear();
+
             }
             catch(tf::TransformException& ex)
             {
                 ROS_ERROR_STREAM( "Transform error of sensor data: " << ex.what() << ", quitting callback");
                 return;
             }
-
-            std::cout << "TESTING_END " << std::endl;
-
-
-            pcl::octree::OctreePointCloudDensity<pcl::PointXYZ> octreeA (octree_resolution_); // low resolution
-
-            octreeA.defineBoundingBox (-5.0, -5.0, -5.0, 5.0, 5.0, 5.0);
-
-            // add point data to octree
-            octreeA.setInputCloud (cloud_in2_xfrm);
-            
-            octreeA.addPointsFromInputCloud ();
-
-            pcl::PointCloud<pcl::PointXYZI>::Ptr test_output(new pcl::PointCloud<pcl::PointXYZI>);
-
-            // 
-            // check density information
-            for (float z = -5.0f; z < 5.0f; z += octree_resolution_)
-            {
-                for (float y = -5.0f; y < 5.0f; y += octree_resolution_)
-                {
-                    for (float x = -5.0f; x < 5.0f; x += octree_resolution_)
-                    {
-
-                        long int count = octreeA.getVoxelDensityAtPoint(pcl::PointXYZ(x, y, z));
-                        if(count > octree_min_count_ && count < octree_max_count_)
-                        {
-                            pcl::PointXYZI*pt=new pcl::PointXYZI();
-                            pt->x = x + 0.5 * octree_resolution_;
-                            pt->y = y + 0.5 * octree_resolution_;
-                            pt->z = z + 0.5 * octree_resolution_;
-                            pt->intensity = count;
-                            test_output->push_back(*pt);
-                        }
-                    }
-                }
-            }
-                
-            test_output->width = test_output->points.size ();
-            test_output->height = 1;
-            test_output->is_dense = true;
-            test_output->header.seq = seq;
-            test_output->header.frame_id = "ouster_link"; //cloud_in2->header.frame_id;
-            pcl_conversions::toPCL(ros::Time::now(), test_output->header.stamp);
-            pub_test_pcl_.publish (test_output);
-
         }
 
         if(range_pcl == 1)
