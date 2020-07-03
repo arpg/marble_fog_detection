@@ -152,6 +152,55 @@ namespace fog
             }
         }
 
+        if(range_pcl == 0)
+        {
+
+            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
+            pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
+            
+            // // Try to publish half of the point cloud
+            pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
+            pcl::ExtractIndices<pcl::PointXYZI> extract;
+
+            
+            pcl::PointCloud<pcl::PointXYZI>::Ptr few_points(new pcl::PointCloud<pcl::PointXYZI>);
+
+            for (int i = 0; i < 80; i++)
+            {
+                std::cout << "hi" << std::endl;
+                inliers->indices.push_back(i);
+                // const auto& pt = cloud_in2->points[i];    
+                // few_points.push_back (pcl::PointXYZI (pt.x, pt.y, pt.z, i));
+            }
+            
+            extract.setInputCloud(cloud_in2);
+            extract.setIndices(inliers);
+            extract.setNegative(false);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr single_point(new pcl::PointCloud<pcl::PointXYZI>);
+            extract.filter(*single_point);
+            
+            single_point->width = single_point->points.size ();
+            single_point->height = 1;
+            single_point->is_dense = true;
+
+            seq++;
+            single_point->header.seq = seq;
+            single_point->header.frame_id = cloud_in2->header.frame_id;
+            pcl_conversions::toPCL(ros::Time::now(), single_point->header.stamp);
+            pub_conf_pcl_.publish (single_point);
+
+            // few_points->width = single_point->points.size ();
+            // few_points->height = 1;
+            // few_points->is_dense = true;
+
+            // seq++;
+            // few_points->header.seq = seq;
+            // few_points->header.frame_id = cloud_in2->header.frame_id;
+            // pcl_conversions::toPCL(ros::Time::now(), few_points->header.stamp);
+            // pub_conf_pcl_.publish (few_points);
+
+        }
+
         if(range_pcl == 1)
         {
             // start 0.038118956 seconds
