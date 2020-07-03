@@ -71,6 +71,10 @@
 #include <ouster_ros/OS1ConfigSrv.h>
 #include <ouster_ros/os1_ros.h>
 
+#include <chrono> 
+using namespace std::chrono; 
+
+
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
 
 typedef PointCloud::Ptr ptr_cloud;
@@ -199,7 +203,6 @@ namespace fog
       cv::Mat last_noreturn_img;
       cv::Mat last_prob_noreturn_img;
       cv::Mat sum_range_img;
-      cv::Mat sum_of_sq_range_img;
       cv::Mat acc_noreturn_img;
       cv::Mat acc2_noreturn_img;
       
