@@ -92,16 +92,11 @@ namespace fog
         transform_pcl_pitch_        = config.transform_pcl_pitch;
         transform_pcl_yaw_          = config.transform_pcl_yaw;
         normal_radius_              = config.normal_radius;
-        normal_x_LT_threshold_      = config.normal_x_LT_threshold;
-        normal_x_GT_threshold_      = config.normal_x_GT_threshold;
-        normal_y_LT_threshold_      = config.normal_y_LT_threshold;
-        normal_y_GT_threshold_      = config.normal_y_GT_threshold;
-        normal_z_LT_threshold_      = config.normal_z_LT_threshold;
-        normal_z_GT_threshold_      = config.normal_z_GT_threshold;
         ror_radius_                 = config.ror_radius;
         ror_min_neighbors_          = config.ror_min_neighbors;
-        min_range_deviation_        = config.min_range_deviation;
-
+        fog_min_range_deviation_    = config.fog_min_range_deviation;
+        fog_radius_high_intensity_  = config.fog_radius_high_intensity;
+        
     };
 
     void FogDetectionNodelet::range_image_cb(const sensor_msgs::ImageConstPtr& image_msg)
@@ -168,7 +163,7 @@ namespace fog
             ouster_ros::OS1::CloudOS1 cloud_in{};
             pcl::fromROSMsg(*cloud_in_ros, cloud_in);
 
-            pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZ>);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
             
             sensor_msgs::Image range_image;
@@ -440,10 +435,12 @@ namespace fog
             
             std::vector<float> bool_vec;
 
+            // Iterate over each pixel
             for(int i = 0; i < range_img.rows; i++)
             {
                 for(int j = 0; j < range_img.cols; j++)
                 {
+                    // Ignore border pixels, ignore pixels with current or previous value of 0 (no return) 
                     if( (i < n_above) || (i > range_img.rows - n_below) || (j < n_left) || (j > range_img.cols - n_right || range_img.at<float>(i,j) == 0) || dev_range_bin_img.at<float>(i,j) == 0 )
                     {
                         filtered_img.at<float>(i,j) = 0;
@@ -453,6 +450,7 @@ namespace fog
                         std::vector<float> data_vec;
                         std::vector<float> pixel_vec(25, range_img.at<float>(i,j));
 
+                        // Add a neighboring box of 25 pixels (5x5) to an vector
                         for(int m = -n_left; m <= n_right; m++)
                         {
                             for(int n = -n_above; n <= n_below; n++)
@@ -469,15 +467,18 @@ namespace fog
                         {
                             if(element != 0)
                             {
+                                // Compute the normalized deviation from the center pixel range: (pixel - center pixel)/center pixel
+                                // Threshold so only background points are ignored (only keep foreground points)
                                 element = std::max(-0.01f, (element - range_img.at<float>(i,j)))/element;
                             }
                         }
 
+                        // Sum the normalized deviation
                         float sum = std::inner_product(std::begin(data_vec), std::end(data_vec), std::begin(kernel_vec), 0.0);
 
                         float cnt_nonzero = std::count_if(data_vec.begin(), data_vec.end(),[&](float const& val){ return val != 0; });
 
-                        
+                        // Divide the sum of normalized deviation by the number of value returns in the 5x5 box (ignore 0’s)
                         float avgval = sum / cnt_nonzero;
 
                         filtered_img.at<float>(i,j) = avgval;
@@ -512,21 +513,58 @@ namespace fog
 
             // Extract PCL Indices
             cv::Mat filter_img(H, W, CV_32FC1, 0.0);
-            cv::threshold(filtered_img, filter_img, min_range_deviation_, 1.0, THRESH_TOZERO); // dev_diff_range_img
+            cv::threshold(filtered_img, filter_img, fog_min_range_deviation_, 1.0, THRESH_TOZERO); // dev_diff_range_img
             
             // // Try to publish half of the point cloud
             pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-            pcl::ExtractIndices<pcl::PointXYZ> extract;
+            pcl::ExtractIndices<pcl::PointXYZI> extract;
 
+            // https://vml.sakura.ne.jp/koeda/PCL/tutorials/html/kdtree_search.html
+            pcl::KdTreeFLANN<pcl::PointXYZI> kdtree;
+            kdtree.setInputCloud (cloud_in2);
+            pcl::PointXYZI search_pt;
+            bool flag_fog;
+            
+            // Iterate through the depth image
             for (int u = 0; u < H; u++)
             {
                 for (int v = 0; v < W; v++)
                 {
+                    // If the pixel is 0.1m closer than the surrounding backgroud pixels, investigate:
                     if(filter_img.at<float>(u,v) > 0.1)
                     {
                         const size_t vv = (v + px_offset[u]) % W;
                         const size_t i = vv * H + u;
-                        inliers->indices.push_back(i);
+                        search_pt = cloud_in2->points[i];
+
+                        // If the point is withint the intensity band of fog, then check out it's neighbors
+                        if(search_pt.intensity > 10 && search_pt.intensity < 100)
+                        {
+                            // Neighbors within radius search
+                            std::vector<int> pointIdxRadiusSearch;
+                            std::vector<float> pointRadiusSquaredDistance;
+                            
+                            // If it has neighbors
+                            if (kdtree.radiusSearch (search_pt, fog_radius_high_intensity_, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0)
+                            {
+                                // Iterate over neighbors, and disregard if its neighbors have high-intensity points
+                                flag_fog = 1;
+                                for (size_t i = 0; i < pointIdxRadiusSearch.size (); ++i)
+                                {
+                                    if(cloud_in2->points[ pointIdxRadiusSearch[i] ].intensity > 100)
+                                    {
+                                        flag_fog = 0;
+                                    }
+                                }
+                                // If all neighbors are in intensity band of fog, then include this point in the fog pcl
+                                if(flag_fog == 1)
+                                {
+                                    inliers->indices.push_back(i);
+                                }
+                            }
+
+                        }
+
                     }
                 }
             }
@@ -534,7 +572,7 @@ namespace fog
             extract.setInputCloud(cloud_in2);
             extract.setIndices(inliers);
             extract.setNegative(false);
-            pcl::PointCloud<pcl::PointXYZ>::Ptr output(new pcl::PointCloud<pcl::PointXYZ>);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr output(new pcl::PointCloud<pcl::PointXYZI>);
             extract.filter(*output);
             
             output->width = output->points.size ();

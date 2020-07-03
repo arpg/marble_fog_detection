@@ -181,12 +181,6 @@ namespace fog
       float transform_pcl_pitch_;
       float transform_pcl_yaw_;
       float normal_radius_;
-      float normal_x_LT_threshold_;
-      float normal_x_GT_threshold_;
-      float normal_y_LT_threshold_;
-      float normal_y_GT_threshold_;
-      float normal_z_LT_threshold_;
-      float normal_z_GT_threshold_;
       float intensity_LT_threshold_;
       float intensity_GT_threshold_;
       float sor_nearest_neighbors_;
@@ -194,7 +188,8 @@ namespace fog
       float ror_radius_;
       float ror_min_neighbors_;
       float height_variance_radius_;
-      float min_range_deviation_;
+      float fog_min_range_deviation_;
+      float fog_radius_high_intensity_;
 
       cv::Mat last_intensity_img;
       cv::Mat last_range_img;
