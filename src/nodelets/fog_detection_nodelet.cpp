@@ -69,23 +69,68 @@ namespace fog
 
         // azim_LUT = 
 
+        int H = 64;
         int W = 1024;
         std::vector<double> azim_interval(W);
+        std::vector<double> elev_interval(H);
         float a = 1;
-        float azim_delta = 360.0 / (W - 1);
-        std::generate(azim_interval.begin(), azim_interval.end(), [n = 1, &azim_delta]() mutable { return n++ * azim_delta; });
+        float azim_delta = ((180.0) - (-180.0)) / W;
+        float elev_delta = ((16.610) - (-16.610)) / (H - 1);
+        std::generate(azim_interval.begin(), azim_interval.end(), [n = -W/2, &azim_delta]() mutable { return n++ * azim_delta; });
+        std::generate(elev_interval.begin(), elev_interval.end(), [n = -H/2, &elev_delta]() mutable { return n++ * elev_delta; });
         
-        std::vector<double> azim_LUT = {0.0, 50.0, 89.0, 100.0};
+        // std::vector<double> azim_LUT_test = {0.0, 50.0, 89.0, 100.0};
+        // ans = binarySearch(azim_LUT_test, 86.0, 2.0);
+        // std::cout << "86 -> " << ans << std::endl;
 
-        std::cout << azim_delta << std::endl;
+        // ans = binarySearch(azim_LUT_test, 87.0, 2.0);
+        // std::cout << "87 -> " << ans << std::endl;
+
+        // ans = binarySearch(azim_LUT_test, 88.0, 2.0);
+        // std::cout << "88 -> " << ans << std::endl;
+
+        // ans = binarySearch(azim_LUT_test, 89.0, 2.0);
+        // std::cout << "89 -> " << ans << std::endl;
+
+        // ans = binarySearch(azim_LUT_test, 90.0, 2.0);
+        // std::cout << "90 -> " << ans << std::endl;
         
-        std::cout << W << std::endl;
+        // ans = binarySearch(azim_LUT_test, 91.0, 2.0);
+        // std::cout << "91 -> " << ans << std::endl;
 
-   std::cout << "The vector elements are : ";
-
-   for(int i=0; i < azim_interval.size(); i++)
-   std::cout << azim_interval.at(i) << ' ';
+        // ans = binarySearch(azim_LUT_test, 92.0, 2.0);
+        // std::cout << "92 -> " << ans << std::endl;
         
+
+        // std::cout << "The azimuthal angles are: ";
+
+        // for(int i=0; i < azim_interval.size(); i++)
+        // std::cout << azim_interval.at(i) << ' ';
+
+        // std::cout << "The elevation angles are: ";
+
+        // for(int i=0; i < elev_interval.size(); i++)
+        // std::cout << elev_interval.at(i) << ' ';
+
+        std::vector<double> azim_LUT(W);
+        float azim_res = ((180) - (-180) ) / W;
+        linearSpacedArray(azim_LUT, -180, 180 - azim_res, W);
+
+        std::cout << "The azimuthal angles are: ";
+        for(int i=0; i < azim_LUT.size(); i++)
+        std::cout << azim_LUT.at(i) << ' ';
+        std::cout << std::endl;
+        std::cout << std::endl;
+
+        std::vector<double> elev_LUT(H);
+        linearSpacedArray(elev_LUT, -16.611, 16.611, H - 1);
+
+        std::cout << "The elevation angles are: ";
+        for(int i=0; i < elev_LUT.size(); i++)
+        std::cout << elev_LUT.at(i) << ' ';
+        std::cout << std::endl;
+        std::cout << std::endl;
+                
     };
 
     void FogDetectionNodelet::configCb(Config &config, uint32_t level)
@@ -175,7 +220,6 @@ namespace fog
         if(range_pcl == 0)
         {
 
-            std::cout << "---------BEGIN LOOP----------" << std::endl;
 
             pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
@@ -187,57 +231,83 @@ namespace fog
             // X: NORTH
             // Y: EAST
             // Z: UP
+            
+            // NOTE: XYZ --> NWU (ouster_link frame), indices start at NORTH and rotate CLOCKWISE
+            // NOTE: Azim angles start at NORTH and rotate CLOCKWISE (in ouster_link frame)
+            // NOTE: Azim angles are -180 (NORTH), ... -90 (EAST), ... 0 (SOUTH), 90 (WEST), ... 180 (NORTH)
+
+            std::vector<double> range(cloud_in2->points.size());
+            std::vector<double> azim_angle(cloud_in2->points.size());
+            std::vector<double> elev_angle(cloud_in2->points.size());
+
+
             for (int i = 0; i < cloud_in2->points.size(); i++)
             {
                 const auto& pt      = cloud_in2->points[i];
                 float x2            = pt.x * pt.x;
                 float y2            = pt.y * pt.y;
                 float z2            = pt.z * pt.z;
-                float range         = sqrt(x2 + y2 + z2);
-                float azim_angle;
-                float elev_angle;
-                if(range > 0)
+                range[i]            = sqrt(x2 + y2 + z2);
+                if(range[i] > 0)
                 {
-                    azim_angle      = atan2(-pt.y, pt.x) * 180 / M_PI; // THIS IS CURRENTLY WRONG I BELIEVE
-                    elev_angle      = atan2(pt.z, sqrt(x2 + y2)) * 180 / M_PI;
+                    azim_angle[i]   = atan2(pt.y, -pt.x) * 180 / M_PI; // THIS IS CURRENTLY WRONG I BELIEVE
+                    elev_angle[i]   = atan2(pt.z, sqrt(x2 + y2)) * 180 / M_PI;
                 }
                 else
                 {
-                    azim_angle      = 0;
-                    elev_angle      = 0;
+                    azim_angle[i]   = 0;
+                    elev_angle[i]   = 0;
                 }
 
-                std::cout << "Point " << i << " / X " << pt.x << " / Y " << pt.y << " / Z " << pt.z << " / Range " << range << " / Azim Angle " << azim_angle <<  " / Elev Angle "  << elev_angle << std::endl;
-                // std::cout << azim_angle << " " << elev_angle << std::endl;
-
+                // std::cout << "Point " << i << " / X " << pt.x << " / Y " << pt.y << " / Z " << pt.z << " / Range " << range[i] << " / Azim Angle " << azim_angle[i] <<  " / Elev Angle "  << elev_angle[i] << std::endl;
                 
             }
 
 
+            // std::cout << std::endl;
+            // std::cout << std::endl;
 
-            std::vector<double> azim_LUT = {0.0, 50.0, 89.0, 100.0};
-            double ans;
+            // std::cout << "---------BEGIN LOOP----------" << std::endl;
 
-            ans = binarySearch(azim_LUT, 86.0, 2.0);
-            std::cout << "86 -> " << ans << std::endl;
+            // std::cout << "The azimuthal angles are : " << std::endl;
+            // for(int i=0; i < azim_angle.size(); i++)
+            // {
+            //     std::cout << azim_angle.at(i) << ' ';
+            // };
 
-            ans = binarySearch(azim_LUT, 87.0, 2.0);
-            std::cout << "87 -> " << ans << std::endl;
+            // std::cout << "The elevation angles are : " << std::endl;
+            // for(int i=0; i < elev_angle.size(); i++)
+            // {
+            //     std::cout << elev_angle.at(i) << ' ';
+            // };
 
-            ans = binarySearch(azim_LUT, 88.0, 2.0);
-            std::cout << "88 -> " << ans << std::endl;
+            // std::cout << std::endl;
+            // std::cout << std::endl;
 
-            ans = binarySearch(azim_LUT, 89.0, 2.0);
-            std::cout << "89 -> " << ans << std::endl;
 
-            ans = binarySearch(azim_LUT, 90.0, 2.0);
-            std::cout << "90 -> " << ans << std::endl;
+            // std::vector<double> azim_LUT = {0.0, 50.0, 89.0, 100.0};
+            // double ans;
+
+            // ans = binarySearch(azim_LUT, 86.0, 2.0);
+            // std::cout << "86 -> " << ans << std::endl;
+
+            // ans = binarySearch(azim_LUT, 87.0, 2.0);
+            // std::cout << "87 -> " << ans << std::endl;
+
+            // ans = binarySearch(azim_LUT, 88.0, 2.0);
+            // std::cout << "88 -> " << ans << std::endl;
+
+            // ans = binarySearch(azim_LUT, 89.0, 2.0);
+            // std::cout << "89 -> " << ans << std::endl;
+
+            // ans = binarySearch(azim_LUT, 90.0, 2.0);
+            // std::cout << "90 -> " << ans << std::endl;
             
-            ans = binarySearch(azim_LUT, 91.0, 2.0);
-            std::cout << "91 -> " << ans << std::endl;
+            // ans = binarySearch(azim_LUT, 91.0, 2.0);
+            // std::cout << "91 -> " << ans << std::endl;
 
-            ans = binarySearch(azim_LUT, 92.0, 2.0);
-            std::cout << "92 -> " << ans << std::endl;
+            // ans = binarySearch(azim_LUT, 92.0, 2.0);
+            // std::cout << "92 -> " << ans << std::endl;
 
 
 
@@ -332,6 +402,9 @@ namespace fog
             float max_dist = 0;
             float last_dist = 0;
 
+            // NOTE: XYZ --> NWU (os1_lidar frame), indices start at NORTH and rotate CLOCKWISE
+            // NOTE: Azim angle should be -180 ... 0 ... 180
+
             // NOTE: AZIMUTHAL ANGLES IN EACH COLUMN
             // NOTE:    COLUMN 0, COLUMN 1, ..., COLUMN 502, COLUMN 503, COLUMN 504, COLUMN 505, ..., COLUMN 1022, COLUMN 1023
             // NOTE:    -3.113,   -3.46456, ..., -179.59612, -179.94768,  179.70076,   179.3492, ...,    -2.40732,    -2.75888
@@ -364,19 +437,21 @@ namespace fog
             for (int i = 0; i < H; i++)
             {
                 elev_val[i] = atan2(z_img.at<float>(i,40), sqrt(x_img.at<float>(i,40) * x_img.at<float>(i,40) 
-                                                            + y_img.at<float>(i,40) * y_img.at<float>(i,40))) * 180 / M_PI;
+                                                              + y_img.at<float>(i,40) * y_img.at<float>(i,40))) * 180 / M_PI;
             } 
             
             std::cout << "The azimuthal angles are : " << std::endl;
             for(int i=0; i < azim_val.size(); i++)
             {
-                std::cout << azim_val.at(i) << ' ';  
+                std::cout << azim_val.at(i) << ' ';
             };
+
+            std::cout << "Point " << 10 << " / X " << x_img.at<float>(10,40) << " / Y " << y_img.at<float>(10,40) << " / Z " << "Azim Angle " << azim_val[9] <<  " / Elev Angle "  << elev_val[39] << std::endl;
 
             // std::cout << "The elevation angles are : " << std::endl;
             // for(int i=0; i < elev_val.size(); i++)
             // {
-            //     std::cout << elev_val.at(i) << ' ';  
+            //     std::cout << elev_val.at(i) << ' ';
             // };
 
             // std::cout << std::endl;
@@ -423,7 +498,7 @@ namespace fog
             // Publish Range Image
             cv_bridge::CvImage new_range_msg;
             new_range_msg.encoding                  = sensor_msgs::image_encodings::TYPE_32FC1;
-            new_range_msg.image                     = range_img;
+            new_range_msg.image                     = x_img;
             new_range_msg.header.stamp              = ros::Time::now();
             new_range_msg.header.frame_id           = cloud_in_ros->header.frame_id;        
             pub_range_img_.publish(new_range_msg.toImageMsg());
@@ -760,6 +835,17 @@ namespace fog
 
         return returnValue;
     }
+
+    void FogDetectionNodelet::linearSpacedArray(std::vector<double> &xs, double a, double b, std::size_t N)
+    {
+        double h = (b - a) / static_cast<double>(N);
+        std::vector<double>::iterator x;
+        double val;
+        for (x = xs.begin(), val = a; x != xs.end(); ++x, val += h) {
+            *x = val;
+    }
+} 
+
 
 
 }

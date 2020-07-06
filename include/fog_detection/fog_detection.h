@@ -157,6 +157,8 @@ namespace fog
 
     double binarySearch(std::vector<double>& array, const double value, const double threshold);
 
+    void linearSpacedArray(std::vector<double> &xs, double a, double b, std::size_t N);
+
     private:
 
       // Depth Camera Frames
