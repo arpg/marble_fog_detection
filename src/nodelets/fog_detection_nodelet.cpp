@@ -66,6 +66,26 @@ namespace fog
         std::cout << "base_link->camera roll: " << low_roll << std::endl;
         std::cout << "base_link->camera pitch: " << low_pitch << std::endl;
         std::cout << "base_link->camera yaw: " << low_yaw << std::endl;
+
+        // azim_LUT = 
+
+        int W = 1024;
+        std::vector<double> azim_interval(W);
+        float a = 1;
+        float azim_delta = 360.0 / (W - 1);
+        std::generate(azim_interval.begin(), azim_interval.end(), [n = 1, &azim_delta]() mutable { return n++ * azim_delta; });
+        
+        std::vector<double> azim_LUT = {0.0, 50.0, 89.0, 100.0};
+
+        std::cout << azim_delta << std::endl;
+        
+        std::cout << W << std::endl;
+
+   std::cout << "The vector elements are : ";
+
+   for(int i=0; i < azim_interval.size(); i++)
+   std::cout << azim_interval.at(i) << ' ';
+        
     };
 
     void FogDetectionNodelet::configCb(Config &config, uint32_t level)
@@ -155,6 +175,8 @@ namespace fog
         if(range_pcl == 0)
         {
 
+            std::cout << "---------BEGIN LOOP----------" << std::endl;
+
             pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
             
@@ -162,32 +184,85 @@ namespace fog
             pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
             pcl::ExtractIndices<pcl::PointXYZI> extract;
 
-            
-            pcl::PointCloud<pcl::PointXYZI>::Ptr few_points(new pcl::PointCloud<pcl::PointXYZI>);
-
-            for (int i = 0; i < 80; i++)
+            // X: NORTH
+            // Y: EAST
+            // Z: UP
+            for (int i = 0; i < cloud_in2->points.size(); i++)
             {
-                std::cout << "hi" << std::endl;
-                inliers->indices.push_back(i);
-                // const auto& pt = cloud_in2->points[i];    
-                // few_points.push_back (pcl::PointXYZI (pt.x, pt.y, pt.z, i));
-            }
-            
-            extract.setInputCloud(cloud_in2);
-            extract.setIndices(inliers);
-            extract.setNegative(false);
-            pcl::PointCloud<pcl::PointXYZI>::Ptr single_point(new pcl::PointCloud<pcl::PointXYZI>);
-            extract.filter(*single_point);
-            
-            single_point->width = single_point->points.size ();
-            single_point->height = 1;
-            single_point->is_dense = true;
+                const auto& pt      = cloud_in2->points[i];
+                float x2            = pt.x * pt.x;
+                float y2            = pt.y * pt.y;
+                float z2            = pt.z * pt.z;
+                float range         = sqrt(x2 + y2 + z2);
+                float azim_angle;
+                float elev_angle;
+                if(range > 0)
+                {
+                    azim_angle      = atan2(-pt.y, pt.x) * 180 / M_PI; // THIS IS CURRENTLY WRONG I BELIEVE
+                    elev_angle      = atan2(pt.z, sqrt(x2 + y2)) * 180 / M_PI;
+                }
+                else
+                {
+                    azim_angle      = 0;
+                    elev_angle      = 0;
+                }
 
-            seq++;
-            single_point->header.seq = seq;
-            single_point->header.frame_id = cloud_in2->header.frame_id;
-            pcl_conversions::toPCL(ros::Time::now(), single_point->header.stamp);
-            pub_conf_pcl_.publish (single_point);
+                std::cout << "Point " << i << " / X " << pt.x << " / Y " << pt.y << " / Z " << pt.z << " / Range " << range << " / Azim Angle " << azim_angle <<  " / Elev Angle "  << elev_angle << std::endl;
+                // std::cout << azim_angle << " " << elev_angle << std::endl;
+
+                
+            }
+
+
+
+            std::vector<double> azim_LUT = {0.0, 50.0, 89.0, 100.0};
+            double ans;
+
+            ans = binarySearch(azim_LUT, 86.0, 2.0);
+            std::cout << "86 -> " << ans << std::endl;
+
+            ans = binarySearch(azim_LUT, 87.0, 2.0);
+            std::cout << "87 -> " << ans << std::endl;
+
+            ans = binarySearch(azim_LUT, 88.0, 2.0);
+            std::cout << "88 -> " << ans << std::endl;
+
+            ans = binarySearch(azim_LUT, 89.0, 2.0);
+            std::cout << "89 -> " << ans << std::endl;
+
+            ans = binarySearch(azim_LUT, 90.0, 2.0);
+            std::cout << "90 -> " << ans << std::endl;
+            
+            ans = binarySearch(azim_LUT, 91.0, 2.0);
+            std::cout << "91 -> " << ans << std::endl;
+
+            ans = binarySearch(azim_LUT, 92.0, 2.0);
+            std::cout << "92 -> " << ans << std::endl;
+
+
+
+
+
+
+
+
+            // pcl::PointCloud<pcl::PointXYZI>::Ptr few_points(new pcl::PointCloud<pcl::PointXYZI>);
+
+            // extract.setInputCloud(cloud_in2);
+            // extract.setIndices(inliers);
+            // extract.setNegative(false);
+            // pcl::PointCloud<pcl::PointXYZI>::Ptr single_point(new pcl::PointCloud<pcl::PointXYZI>);
+            // extract.filter(*single_point);
+            
+            // single_point->width = single_point->points.size ();
+            // single_point->height = 1;
+            // single_point->is_dense = true;
+
+            // seq++;
+            // single_point->header.seq = seq;
+            // single_point->header.frame_id = cloud_in2->header.frame_id;
+            // pcl_conversions::toPCL(ros::Time::now(), single_point->header.stamp);
+            // pub_conf_pcl_.publish (single_point);
 
             // few_points->width = single_point->points.size ();
             // few_points->height = 1;
@@ -239,6 +314,9 @@ namespace fog
             cv::Mat max_range_img(H, W, CV_32FC1, 20.0);
             cv::Mat nonzero_range_img(H, W, CV_32FC1, 0.1);
             cv::Mat range_img(H, W, CV_32FC1, 0.0);
+            cv::Mat x_img(H, W, CV_32FC1, 0.0);
+            cv::Mat y_img(H, W, CV_32FC1, 0.0);
+            cv::Mat z_img(H, W, CV_32FC1, 0.0);
             cv::Mat avg_range_img(H, W, CV_32FC1, 0.0);
             cv::Mat diff_range_img(H, W, CV_32FC1, 0.0);
             cv::Mat var_s_raw_img(H, W, CV_32FC1, 0.0);
@@ -254,17 +332,54 @@ namespace fog
             float max_dist = 0;
             float last_dist = 0;
 
+            // NOTE: AZIMUTHAL ANGLES IN EACH COLUMN
+            // NOTE:    COLUMN 0, COLUMN 1, ..., COLUMN 502, COLUMN 503, COLUMN 504, COLUMN 505, ..., COLUMN 1022, COLUMN 1023
+            // NOTE:    -3.113,   -3.46456, ..., -179.59612, -179.94768,  179.70076,   179.3492, ...,    -2.40732,    -2.75888
             for (int u = 0; u < H; u++) {
                 for (int v = 0; v < W; v++) {
                     const size_t vv = (v + px_offset[u]) % W;
                     const size_t index = vv * H + u;
                     const auto& pt = cloud_in[index];
+                    x_img.at<float>(u,v) = pt.x; // Physical x-coordinate (NORTH)
+                    y_img.at<float>(u,v) = pt.y; // Physical y-coordinate (WEST)
+                    z_img.at<float>(u,v) = pt.z; // Physical z-coordinate (UP)
                     range_img.at<float>(u,v) = pt.range * 1e-3; // Physical range from 0 - 100 m (converting from mm --> m)
                     // range_img.at<float>(u,v) = pt.range * 5e-3; // Range for 8-bit image from 0 - 255
                     noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
                     intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
                 }
             }
+
+            std::cout << "------------------------ BEGIN LOOP ------------------------" << std::endl;
+
+            float x_val;
+            float y_val;
+            std::vector<double> azim_val(W);
+            std::vector<double> elev_val(H);
+
+            for (int i = 0; i < W; i++)
+            {
+                azim_val[i] = atan2(y_img.at<float>(0,i), -x_img.at<float>(0,i)) * 180 / M_PI;
+            }
+            for (int i = 0; i < H; i++)
+            {
+                elev_val[i] = atan2(z_img.at<float>(i,40), sqrt(x_img.at<float>(i,40) * x_img.at<float>(i,40) 
+                                                            + y_img.at<float>(i,40) * y_img.at<float>(i,40))) * 180 / M_PI;
+            } 
+            
+            std::cout << "The azimuthal angles are : " << std::endl;
+            for(int i=0; i < azim_val.size(); i++)
+            {
+                std::cout << azim_val.at(i) << ' ';  
+            };
+
+            // std::cout << "The elevation angles are : " << std::endl;
+            // for(int i=0; i < elev_val.size(); i++)
+            // {
+            //     std::cout << elev_val.at(i) << ' ';  
+            // };
+
+            // std::cout << std::endl;
 
             // stop 0.038118956 seconds
             // start 0.002747821 seconds
@@ -628,6 +743,24 @@ namespace fog
         last_intensity_img = new_intensity_img;
 
     };
+
+    double FogDetectionNodelet::binarySearch(std::vector<double>& array, const double value, const double threshold) 
+    {
+        // I assume here that the array is sorted ...
+        // If I cannot find it, I will return infinity (:
+
+        double returnValue = std::numeric_limits<double>::infinity();
+
+        std::vector<double>::iterator it = std::lower_bound(array.begin(), array.end(), value - threshold);
+
+        if(it != array.end() ) 
+        {
+            if(fabs(*it - value) <= threshold ) returnValue = *it;
+        }
+
+        return returnValue;
+    }
+
 
 }
 

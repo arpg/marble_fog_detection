@@ -32,8 +32,6 @@
      /media/erush91/3804b1f8-702a-4016-9f15-ea71548f9c72/DEPLOYMENT2_BETA_FEB22/H01/sensor_data_2020-02-22-12-50-24_1.bag
      /media/erush91/3804b1f8-702a-4016-9f15-ea71548f9c72/DEPLOYMENT2_BETA_FEB22/H01/sensor_data_2020-02-22-13-10-24_2.bag">
   </arg> -->
-  
-  
 
   <!-- <arg name="viz" default=
     "/home/erush91/catkin_ws/src/fog_detection/rviz/H01_SATSOP.rviz">
@@ -42,7 +40,6 @@
   <arg name="viz" default=
     "/home/erush91/catkin_ws/src/fog_detection/rviz/H02_NIOSH.rviz">
   </arg>
-
 
   <!-- <arg name="viz" default=
     "/home/erush91/catkin_ws/src/fog_detection/rviz/fog_garage.rviz">

@@ -155,6 +155,8 @@ namespace fog
                                     int width,
                                     int height);
 
+    double binarySearch(std::vector<double>& array, const double value, const double threshold);
+
     private:
 
       // Depth Camera Frames
@@ -205,6 +207,8 @@ namespace fog
       cv::Mat sum_range_img;
       cv::Mat acc_noreturn_img;
       cv::Mat acc2_noreturn_img;
+
+      std::vector<double> azim_LUT;
       
 
       pcl::search::Search<pcl::PointXYZ>::Ptr tree_xyz;
