@@ -67,52 +67,10 @@ namespace fog
         std::cout << "base_link->camera pitch: " << low_pitch << std::endl;
         std::cout << "base_link->camera yaw: " << low_yaw << std::endl;
 
-        // azim_LUT = 
-
         int H = 64;
         int W = 1024;
-        std::vector<double> azim_interval(W);
-        std::vector<double> elev_interval(H);
-        float a = 1;
-        float azim_delta = ((180.0) - (-180.0)) / W;
-        float elev_delta = ((16.610) - (-16.610)) / (H - 1);
-        std::generate(azim_interval.begin(), azim_interval.end(), [n = -W/2, &azim_delta]() mutable { return n++ * azim_delta; });
-        std::generate(elev_interval.begin(), elev_interval.end(), [n = -H/2, &elev_delta]() mutable { return n++ * elev_delta; });
         
-        // std::vector<double> azim_LUT_test = {0.0, 50.0, 89.0, 100.0};
-        // ans = binarySearch(azim_LUT_test, 86.0, 2.0);
-        // std::cout << "86 -> " << ans << std::endl;
-
-        // ans = binarySearch(azim_LUT_test, 87.0, 2.0);
-        // std::cout << "87 -> " << ans << std::endl;
-
-        // ans = binarySearch(azim_LUT_test, 88.0, 2.0);
-        // std::cout << "88 -> " << ans << std::endl;
-
-        // ans = binarySearch(azim_LUT_test, 89.0, 2.0);
-        // std::cout << "89 -> " << ans << std::endl;
-
-        // ans = binarySearch(azim_LUT_test, 90.0, 2.0);
-        // std::cout << "90 -> " << ans << std::endl;
-        
-        // ans = binarySearch(azim_LUT_test, 91.0, 2.0);
-        // std::cout << "91 -> " << ans << std::endl;
-
-        // ans = binarySearch(azim_LUT_test, 92.0, 2.0);
-        // std::cout << "92 -> " << ans << std::endl;
-        
-
-        // std::cout << "The azimuthal angles are: ";
-
-        // for(int i=0; i < azim_interval.size(); i++)
-        // std::cout << azim_interval.at(i) << ' ';
-
-        // std::cout << "The elevation angles are: ";
-
-        // for(int i=0; i < elev_interval.size(); i++)
-        // std::cout << elev_interval.at(i) << ' ';
-
-        std::vector<double> azim_LUT(W);
+        azim_LUT.resize(W);
         float azim_res = ((180) - (-180) ) / W;
         linearSpacedArray(azim_LUT, -180, 180 - azim_res, W);
 
@@ -121,8 +79,8 @@ namespace fog
         std::cout << azim_LUT.at(i) << ' ';
         std::cout << std::endl;
         std::cout << std::endl;
-
-        std::vector<double> elev_LUT(H);
+        
+        elev_LUT.resize(H);
         linearSpacedArray(elev_LUT, -16.611, 16.611, H - 1);
 
         std::cout << "The elevation angles are: ";
@@ -240,6 +198,12 @@ namespace fog
             std::vector<double> azim_angle(cloud_in2->points.size());
             std::vector<double> elev_angle(cloud_in2->points.size());
 
+            int H = 64;
+            int W = 1024;
+            cv::Mat range_img(H, W, CV_32FC1, 0.0);
+
+            int u;
+            int v;
 
             for (int i = 0; i < cloud_in2->points.size(); i++)
             {
@@ -251,7 +215,25 @@ namespace fog
                 if(range[i] > 0)
                 {
                     azim_angle[i]   = atan2(pt.y, -pt.x) * 180 / M_PI; // THIS IS CURRENTLY WRONG I BELIEVE
+                    if(azim_angle[i] >= M_PI - 0.01)
+                    {
+                        azim_angle[i] = azim_angle[i] - 2*M_PI;
+                    }
+
                     elev_angle[i]   = atan2(pt.z, sqrt(x2 + y2)) * 180 / M_PI;
+
+                    u = (H-1) - binarySearch(elev_LUT, elev_angle[i], 0.528/2.0);
+                    // std::cout << elev_angle[i] << " -> " << u << std::endl;
+                    
+                    v = binarySearch(azim_LUT, azim_angle[i], 0.36/2.0);
+                    if(v > (W-1))
+                    {
+                        std::cout << "v: " << v << std::endl;
+                        std::cout << "azim_angle: " << azim_angle[i] << std::endl;
+                    }
+                    // std::cout << azim_angle[i] << " -> " << v << std::endl;
+
+                range_img.at<float>(u,v) = range[i]; // Physical range from 0 - 100 m (converting from mm --> m)
                 }
                 else
                 {
@@ -260,9 +242,32 @@ namespace fog
                 }
 
                 // std::cout << "Point " << i << " / X " << pt.x << " / Y " << pt.y << " / Z " << pt.z << " / Range " << range[i] << " / Azim Angle " << azim_angle[i] <<  " / Elev Angle "  << elev_angle[i] << std::endl;
+                                
                 
             }
 
+            std::cout << "seq: " << seq << std::endl;
+            // Publish Range Image
+            cv_bridge::CvImage new_range_msg;
+            new_range_msg.encoding                  = sensor_msgs::image_encodings::TYPE_32FC1;
+            new_range_msg.image                     = range_img;
+            new_range_msg.header.stamp              = ros::Time::now();
+            new_range_msg.header.frame_id           = cloud_in_ros->header.frame_id;        
+            pub_range_img_.publish(new_range_msg.toImageMsg());
+            
+            seq++;
+
+            // std::cout << "The azimuthal angles are: ";
+            // for(int i=0; i < azim_LUT.size(); i++)
+            // std::cout << azim_LUT.at(i) << ' ';
+            // std::cout << std::endl;
+            // std::cout << std::endl;
+
+            // std::cout << "The elevation angles are: ";
+            // for(int i=0; i < elev_LUT.size(); i++)
+            // std::cout << elev_LUT.at(i) << ' ';
+            // std::cout << std::endl;
+            // std::cout << std::endl;
 
             // std::cout << std::endl;
             // std::cout << std::endl;
@@ -498,7 +503,7 @@ namespace fog
             // Publish Range Image
             cv_bridge::CvImage new_range_msg;
             new_range_msg.encoding                  = sensor_msgs::image_encodings::TYPE_32FC1;
-            new_range_msg.image                     = x_img;
+            new_range_msg.image                     = range_img;
             new_range_msg.header.stamp              = ros::Time::now();
             new_range_msg.header.frame_id           = cloud_in_ros->header.frame_id;        
             pub_range_img_.publish(new_range_msg.toImageMsg());
@@ -824,27 +829,31 @@ namespace fog
         // I assume here that the array is sorted ...
         // If I cannot find it, I will return infinity (:
 
-        double returnValue = std::numeric_limits<double>::infinity();
+        double returnValue = std::numeric_limits<double>::infinity(); // if you want to return the LUT value
 
         std::vector<double>::iterator it = std::lower_bound(array.begin(), array.end(), value - threshold);
 
-        if(it != array.end() ) 
+        if(it != array.end()) 
         {
             if(fabs(*it - value) <= threshold ) returnValue = *it;
         }
+        
+        auto returnIndex = std::distance(array.begin(), it); // if you want to return the LUT index
 
-        return returnValue;
+        return returnIndex;
     }
 
+    // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
     void FogDetectionNodelet::linearSpacedArray(std::vector<double> &xs, double a, double b, std::size_t N)
     {
         double h = (b - a) / static_cast<double>(N);
         std::vector<double>::iterator x;
         double val;
-        for (x = xs.begin(), val = a; x != xs.end(); ++x, val += h) {
+        for (x = xs.begin(), val = a; x != xs.end(); ++x, val += h)
+        {
             *x = val;
-    }
-} 
+        }
+    } 
 
 
 

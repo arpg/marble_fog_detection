@@ -211,6 +211,7 @@ namespace fog
       cv::Mat acc2_noreturn_img;
 
       std::vector<double> azim_LUT;
+      std::vector<double> elev_LUT;
       
 
       pcl::search::Search<pcl::PointXYZ>::Ptr tree_xyz;
