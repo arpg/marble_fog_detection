@@ -182,9 +182,6 @@ namespace fog
             pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
             
-            // // Try to publish half of the point cloud
-            pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-            pcl::ExtractIndices<pcl::PointXYZI> extract;
 
             // X: NORTH
             // Y: EAST
@@ -242,11 +239,9 @@ namespace fog
                 }
 
                 // std::cout << "Point " << i << " / X " << pt.x << " / Y " << pt.y << " / Z " << pt.z << " / Range " << range[i] << " / Azim Angle " << azim_angle[i] <<  " / Elev Angle "  << elev_angle[i] << std::endl;
-                                
                 
             }
 
-            std::cout << "seq: " << seq << std::endl;
             // Publish Range Image
             cv_bridge::CvImage new_range_msg;
             new_range_msg.encoding                  = sensor_msgs::image_encodings::TYPE_32FC1;
@@ -348,6 +343,33 @@ namespace fog
             // few_points->header.frame_id = cloud_in2->header.frame_id;
             // pcl_conversions::toPCL(ros::Time::now(), few_points->header.stamp);
             // pub_conf_pcl_.publish (few_points);
+
+
+
+            // // // Try to publish half of the point cloud
+            // pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
+            // pcl::ExtractIndices<pcl::PointXYZI> extract;
+
+            // for (int i = seq * 16; i < seq * 16 + 16; i++)
+            // {
+            //     inliers->indices.push_back(i);
+            // }
+
+            // extract.setInputCloud(cloud_in2);
+            // extract.setIndices(inliers);
+            // extract.setNegative(false);
+            // pcl::PointCloud<pcl::PointXYZI>::Ptr output(new pcl::PointCloud<pcl::PointXYZI>);
+            // extract.filter(*output);
+            
+            // output->width = output->points.size ();
+            // output->height = 1;
+            // output->is_dense = true;
+
+            // seq++;
+            // output->header.seq = seq;
+            // output->header.frame_id = cloud_in2->header.frame_id;
+            // pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
+            // pub_conf_pcl_.publish (output);
 
         }
 
@@ -535,12 +557,6 @@ namespace fog
                                             1/sqrt(2) , 1/sqrt(2),         0, 1/sqrt(2), 1/sqrt(2),
                                             1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
                                             1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2)};
-
-            // std::vector<float> kernel_vec = {1/sqrt(8) , 1/sqrt(5), 1/sqrt(4), 1/sqrt(5), 1/sqrt(8),
-            //                                  1/sqrt(5) , 1/sqrt(4), 1/sqrt(2), 1/sqrt(4), 1/sqrt(5),
-            //                                  1/sqrt(4) , 1/sqrt(1),        0 , 1/sqrt(1), 1/sqrt(4),
-            //                                  1/sqrt(5) , 1/sqrt(4), 1/sqrt(2), 1/sqrt(4), 1/sqrt(5),
-            //                                  1/sqrt(8) , 1/sqrt(5), 1/sqrt(4), 1/sqrt(5), 1/sqrt(8)};
             
             std::vector<float> bool_vec;
 
@@ -640,7 +656,6 @@ namespace fog
             pcl::PointXYZI search_pt;
             bool flag_fog;
 
-            
             // end 0.025598312 seconds            
             // start 0.004650553 seconds
 
@@ -724,39 +739,6 @@ namespace fog
             // // To get the value of duration use the count()
             // // member function on the duration object
             // std::cout << "\n" << duration.count() << "\n" << std::endl;
-
-        }
-        else
-        {
-            pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_in (new pcl::PointCloud<pcl::PointXYZ>);
-            pcl::fromROSMsg(*cloud_in_ros, *cloud_in);
-
-            // // Try to publish half of the point cloud
-            pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-            pcl::ExtractIndices<pcl::PointXYZ> extract;
-
-            std::cout << "seq: " << seq << std::endl;
-
-            for (int i = seq * 16; i < seq * 16 + 16; i++)
-            {
-                inliers->indices.push_back(i);
-            }
-
-            extract.setInputCloud(cloud_in);
-            extract.setIndices(inliers);
-            extract.setNegative(false);
-            pcl::PointCloud<pcl::PointXYZ>::Ptr output(new pcl::PointCloud<pcl::PointXYZ>);
-            extract.filter(*output);
-            
-            output->width = output->points.size ();
-            output->height = 1;
-            output->is_dense = true;
-
-            seq++;
-            output->header.seq = seq;
-            output->header.frame_id = cloud_in->header.frame_id;
-            pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
-            pub_conf_pcl_.publish (output);
 
         }
     
