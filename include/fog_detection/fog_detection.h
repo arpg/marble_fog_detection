@@ -91,9 +91,7 @@ namespace fog
     
       // ROS communication
       boost::shared_ptr<image_transport::ImageTransport> it_in_;
-      ros::Subscriber sub_range_img_;
-      ros::Subscriber sub_intensity_img_;
-      ros::Subscriber sub_low_depth_pcl_;
+      ros::Subscriber sub_pcl_;
 
       ros::Publisher pub_conf_pcl_;
       ros::Publisher pub_range_img_;
@@ -139,14 +137,16 @@ namespace fog
                                     int width,
                                     int height);
 
-    double binarySearch(std::vector<double>& array, const double value, const double threshold);
+      double binarySearch(std::vector<double>& array, const double value, const double threshold);
 
-    void linearSpacedArray(std::vector<double> &xs, double a, double b, std::size_t N);
+      void linearSpacedArray(std::vector<double> &xs, double a, double b, std::size_t N);
 
-    void getDepthImageCPFL(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img);
+      void getDepthImageCPFL(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img);
 
-    void getDepthImageOfficial(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros,
-                               cv::Mat &range_img);
+      void getDepthImageOfficial(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros,
+                                cv::Mat &range_img);
+
+      void getFogFilterImage(cv::Mat &range_img, cv::Mat &filter_img);
 
     private:
 
@@ -202,6 +202,10 @@ namespace fog
       std::vector<double> azim_LUT;
       std::vector<double> elev_LUT;
       
+      int W;
+      int H;
+      std::vector<int> px_offset;
+
 
       pcl::search::Search<pcl::PointXYZ>::Ptr tree_xyz;
       typedef pcl::PointCloud<pcl::PointXYZINormal> PointCloudOut;

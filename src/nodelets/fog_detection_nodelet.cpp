@@ -30,12 +30,7 @@ namespace fog
         boost::lock_guard<boost::mutex> lock(connect_mutex_);
         image_transport::TransportHints hints("raw", ros::TransportHints(), getPrivateNodeHandle());
 
-        // Subscriber Ouster images
-        sub_range_img_ = nh.subscribe("in_range_img", 1, &FogDetectionNodelet::range_image_cb, this);
-        sub_intensity_img_ = nh.subscribe("in_intensity_img", 1, &FogDetectionNodelet::intensity_image_cb, this);
-
-        // sub_low_depth_pcl_ = nh.subscribe("in_pcl", 1,  &FogDetectionNodelet::point_cloud_cb, this);
-        sub_low_depth_pcl_ = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
+        sub_pcl_                    = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
 
         // Publish Point Cloud
         pub_conf_pcl_               = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
@@ -112,28 +107,6 @@ namespace fog
         
     };
 
-    void FogDetectionNodelet::range_image_cb(const sensor_msgs::ImageConstPtr& image_msg)
-    {
-        // analyze_range_images(image_msg,
-        //                      pub_range_img_,
-        //                      low_camera_pixel_x_offset,
-        //                      low_camera_pixel_y_offset,
-        //                      low_camera_pixel_width,
-        //                      low_camera_pixel_height
-        //                      );
-    };
-
-    void FogDetectionNodelet::intensity_image_cb(const sensor_msgs::ImageConstPtr& image_msg)
-    {
-        analyze_intensity_images(image_msg,
-                             pub_intensity_img_,
-                             low_camera_pixel_x_offset,
-                             low_camera_pixel_y_offset,
-                             low_camera_pixel_width,
-                             low_camera_pixel_height
-                             );
-    };
-
     void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
     {
 
@@ -196,9 +169,10 @@ namespace fog
             sensor_msgs::Image intensity_image;
 
             // Get PCL metadata
-            int W = cloud_in_ros->width;
-            int H = cloud_in_ros->height;
-            std::vector<int>  px_offset = ouster::OS1::get_px_offset(W);
+            W = cloud_in_ros->width;
+            H = cloud_in_ros->height;
+            px_offset.resize(H);
+            px_offset = ouster::OS1::get_px_offset(W);
             // for 64 channels, the px_offset =[ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
             //                                   0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
 
@@ -222,14 +196,14 @@ namespace fog
             cv::Mat x_img(H, W, CV_32FC1, 0.0);
             cv::Mat y_img(H, W, CV_32FC1, 0.0);
             cv::Mat z_img(H, W, CV_32FC1, 0.0);
-            cv::Mat avg_range_img(H, W, CV_32FC1, 0.0);
             cv::Mat diff_range_img(H, W, CV_32FC1, 0.0);
             cv::Mat dev_range_img(H, W, CV_32FC1, 0.0);
-            cv::Mat dev_range_bin_img(H, W, CV_32FC1, 0.0);
             cv::Mat return_img(H, W, CV_32FC1, 0.0);
             cv::Mat return_sum_img(H, W, CV_32FC1, 0.0);
 
             cv::Mat zero_range_msk(H, W, CV_32FC1, 0.0);
+
+            cv::Mat filter_img(H, W, CV_32FC1, 0.0);
 
             getDepthImageOfficial(cloud_in_ros, range_img);
 
@@ -269,129 +243,18 @@ namespace fog
             // stop 0.038118956 seconds
             // start 0.002747821 seconds
 
-            if(last_range_img.rows == 0 && last_range_img.cols == 0)
+            // Skip if first frame
+            if(last_range_img.size().height > 0)
             {
+                getFogFilterImage(range_img, filter_img);
             }
-            else
-            {
-                // Binarize depth (range) image
-                cv::threshold(range_img, return_img, 0.10, 1.0, THRESH_BINARY);
-
-                // Average range image
-                cv::boxFilter(range_img, avg_range_img, -1, cv::Size(5,5), cv::Point(-1,-1), false); // do not normalize here
-
-                // Average binarized range image (return image)
-                cv::boxFilter(return_img, return_sum_img, -1, cv::Size(5,5), cv::Point(-1,-1), false); // do not normalize here
-
-                // Scale average range image
-                cv::divide(avg_range_img, return_sum_img, avg_range_img); // normalize here
-
-                // Subtract range image from average range image, threshold betwneen 0 and 10
-                cv::threshold(avg_range_img - range_img, dev_range_img, 0.0, 0.0, THRESH_TOZERO);
-                cv::threshold(dev_range_img, dev_range_img, 10.0, 10.0, THRESH_TRUNC);
-
-                // Subtract range image from average range image, binarize as pre-filter
-                cv::threshold(avg_range_img - range_img, dev_range_bin_img, 0.10, 1.0, THRESH_BINARY);
-                
-                double min = 0, max = 0;
-                cv::Point minLoc(-1, -1), maxLoc(-1, -1);
-                // https://stackoverflow.com/questions/18233691/how-to-index-and-modify-an-opencv-matrix
-
-            }
-
-            // Publish Range Image
-            cv_bridge::CvImage range_msg;
-            range_msg.encoding                      = sensor_msgs::image_encodings::TYPE_32FC1;
-            range_msg.image                         = return_img;
-            range_msg.header.stamp                  = ros::Time::now();
-            range_msg.header.frame_id               = cloud_in_ros->header.frame_id;        
-            pub_range_img_.publish(range_msg.toImageMsg());
             
-            last_range_img                          = range_img;
-
-            // Image Filter
-
-            // compute sum of positive matrix elements
-            // (assuming that M isa double-precision matrix)
-            double sum=0;
-            int n_above = 2;
-            int n_below = 2;
-            int n_left  = 2;
-            int n_right = 2;
-
-            cv::Mat filtered_img(H, W, CV_32FC1, 0.0);
-
-            std::vector<float> kernel_vec = {1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
-                                             1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
-                                             1/sqrt(2) , 1/sqrt(2),         0, 1/sqrt(2), 1/sqrt(2),
-                                             1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
-                                             1/sqrt(2) , 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2)};
-            
-            std::vector<float> bool_vec;
-
-            // end 0.002747821 seconds
-            // start 0.02977038 seconds
-
-            // Iterate over each pixel
-            for(int i = 0; i < range_img.rows; i++)
-            {
-                for(int j = 0; j < range_img.cols; j++)
-                {
-                    // Ignore border pixels, ignore pixels with current or previous value of 0 (no return) 
-                    if( (i < n_above) || (i > range_img.rows - n_below) || (j < n_left) || (j > range_img.cols - n_right || range_img.at<float>(i,j) == 0) || dev_range_bin_img.at<float>(i,j) == 0 )
-                    {
-                        filtered_img.at<float>(i,j) = 0;
-                    }
-                    else
-                    {
-                        std::vector<float> data_vec;
-                        std::vector<float> pixel_vec(25, range_img.at<float>(i,j));
-
-                        // Add a neighboring box of 25 pixels (5x5) to an vector
-                        for(int m = -n_left; m <= n_right; m++)
-                        {
-                            for(int n = -n_above; n <= n_below; n++)
-                            {
-                                data_vec.push_back(range_img.at<float>(i-m,j-n));
-                            }
-                        }
-
-                        // std::cout << "data_vec: ";
-                        // for (auto i : data_vec) std::cout << i << ' ';
-                        // std::cout << '\n';
-
-                        for(auto& element : data_vec)
-                        {
-                            if(element != 0)
-                            {
-                                // Compute the normalized deviation from the center pixel range: (pixel - center pixel)/center pixel
-                                // Threshold so only background points are ignored (only keep foreground points)
-                                element = std::max(-0.01f, (element - range_img.at<float>(i,j)))/element;
-                            }
-                        }
-
-                        // Sum the normalized deviation
-                        float sum = std::inner_product(std::begin(data_vec), std::end(data_vec), std::begin(kernel_vec), 0.0);
-
-                        float cnt_nonzero = std::count_if(data_vec.begin(), data_vec.end(),[&](float const& val){ return val != 0; });
-
-                        // Divide the sum of normalized deviation by the number of value returns in the 5x5 box (ignore 0’s)
-                        float avgval = sum / cnt_nonzero;
-
-                        filtered_img.at<float>(i,j) = avgval;
-                        
-                    }
-                }
-            }
+            last_range_img = range_img;
 
             // end 0.02977038 seconds
             // start 0.025598312 seconds
 
-            // std::cout << "filtered_img: " << filtered_img << std::endl;
-
             // Extract PCL Indices
-            cv::Mat filter_img(H, W, CV_32FC1, 0.0);
-            cv::threshold(filtered_img, filter_img, fog_min_range_deviation_, 1.0, THRESH_TOZERO);
             
             // // Try to publish half of the point cloud
             pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
@@ -489,37 +352,6 @@ namespace fog
 
         }
     
-    };
-
-    void FogDetectionNodelet::analyze_range_images(const sensor_msgs::ImageConstPtr& in_msg,
-                                                   const ros::Publisher pub_img_,
-                                                   int x_offset,
-                                                   int y_offset,
-                                                   int width,
-                                                   int height)
-    {
-
-        // Get cropping parameters
-        int max_width = in_msg->width - x_offset;
-        int max_height = in_msg->height - y_offset;
-        if (width == 0 || width > max_width)
-            width = max_width;
-        if (height == 0 || height > max_height)
-            height = max_height;
-
-        // Convert from ROS to OpenCV
-        CvImageConstPtr source = toCvShare(in_msg);
-
-        // Crop image
-        cv::Mat range_img = source->image(cv::Rect(x_offset, y_offset, width, height));
-
-        // The range image is of type CV_8UC1/mono8 (0-255, 0 is no return, higher is closer to sensor)
-        range_img.convertTo(range_img,CV_32FC1, 0.39215686274); // 100/255 = 0.39215686274
-
-        cv::Mat diff_range_img = abs(range_img - last_range_img);
-
-        last_range_img = range_img;
-
     };
 
     void FogDetectionNodelet::analyze_intensity_images(const sensor_msgs::ImageConstPtr& in_msg,
@@ -659,15 +491,11 @@ namespace fog
     void FogDetectionNodelet::getDepthImageOfficial(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros,
                                                     cv::Mat &range_img)
     {
-
         // start 0.038118956 seconds
         ouster_ros::OS1::CloudOS1 cloud_in{};
         pcl::fromROSMsg(*cloud_in_ros, cloud_in);
         
         // Get PCL metadata
-        int W = cloud_in_ros->width;
-        int H = cloud_in_ros->height;
-        std::vector<int>  px_offset = ouster::OS1::get_px_offset(W);
         // for 64 channels, the px_offset =[ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
         //                                   0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
 
@@ -693,7 +521,129 @@ namespace fog
             }
         }
 
+        // Publish Range Image
+        cv_bridge::CvImage range_msg;
+        range_msg.encoding                      = sensor_msgs::image_encodings::TYPE_32FC1;
+        range_msg.image                         = range_img;
+        range_msg.header.stamp                  = ros::Time::now();
+        range_msg.header.frame_id               = cloud_in_ros->header.frame_id;        
+        pub_range_img_.publish(range_msg.toImageMsg());
     } 
+
+
+    // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
+    void FogDetectionNodelet::getFogFilterImage(cv::Mat &range_img, cv::Mat &filter_img)
+    {
+
+        cv::Mat return_img(H, W, CV_32FC1, 0.0);
+        cv::Mat return_sum_img(H, W, CV_32FC1, 0.0);
+        cv::Mat dev_range_img(H, W, CV_32FC1, 0.0);
+        cv::Mat avg_range_img(H, W, CV_32FC1, 0.0);
+        cv::Mat dev_range_bin_img(H, W, CV_32FC1, 0.0);
+        cv::Mat filtered_img(H, W, CV_32FC1, 0.0);
+
+        // Binarize depth (range) image
+        cv::threshold(range_img, return_img, 0.10, 1.0, THRESH_BINARY);
+
+        // Average range image
+        cv::boxFilter(range_img, avg_range_img, -1, cv::Size(5,5), cv::Point(-1,-1), false); // do not normalize here
+
+        // Average binarized range image (return image)
+        cv::boxFilter(return_img, return_sum_img, -1, cv::Size(5,5), cv::Point(-1,-1), false); // do not normalize here
+
+        // Scale average range image
+        cv::divide(avg_range_img, return_sum_img, avg_range_img); // normalize here
+
+        // Subtract range image from average range image, threshold betwneen 0 and 10
+        cv::threshold(avg_range_img - range_img, dev_range_img, 0.0, 0.0, THRESH_TOZERO);
+        cv::threshold(dev_range_img, dev_range_img, 10.0, 10.0, THRESH_TRUNC);
+
+        // Subtract range image from average range image, binarize as pre-filter
+        cv::threshold(avg_range_img - range_img, dev_range_bin_img, 0.10, 1.0, THRESH_BINARY);
+        
+
+        // DEBUNG: Print min and max, https://stackoverflow.com/questions/18233691/how-to-index-and-modify-an-opencv-matrix
+        // double min = 0, max = 0;
+        // cv::Point minLoc(-1, -1), maxLoc(-1, -1);
+        
+
+        // Image Filter
+
+        // compute sum of positive matrix elements
+        // (assuming that M isa double-precision matrix)
+        double sum  = 0;
+        int n_above = 2;
+        int n_below = 2;
+        int n_left  = 2;
+        int n_right = 2;
+
+        std::vector<float> kernel_vec = {1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
+                                         1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
+                                         1/sqrt(2), 1/sqrt(2),         0, 1/sqrt(2), 1/sqrt(2),
+                                         1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
+                                         1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2)};
+        
+        std::vector<float> bool_vec;
+
+        // end 0.002747821 seconds
+        // start 0.02977038 seconds
+
+        // Iterate over each pixel
+        for(int i = 0; i < range_img.rows; i++)
+        {
+            for(int j = 0; j < range_img.cols; j++)
+            {
+                // Ignore border pixels, ignore pixels with current or previous value of 0 (no return) 
+                if( (i < n_above) || (i > range_img.rows - n_below) || (j < n_left) || (j > range_img.cols - n_right || range_img.at<float>(i,j) == 0) || dev_range_bin_img.at<float>(i,j) == 0 )
+                {
+                    filtered_img.at<float>(i,j) = 0;
+                }
+                else
+                {
+                    std::vector<float> data_vec;
+                    std::vector<float> pixel_vec(25, range_img.at<float>(i,j));
+
+                    // Add a neighboring box of 25 pixels (5x5) to an vector
+                    for(int m = -n_left; m <= n_right; m++)
+                    {
+                        for(int n = -n_above; n <= n_below; n++)
+                        {
+                            data_vec.push_back(range_img.at<float>(i-m,j-n));
+                        }
+                    }
+
+                    // std::cout << "data_vec: ";
+                    // for (auto i : data_vec) std::cout << i << ' ';
+                    // std::cout << '\n';
+
+                    for(auto& element : data_vec)
+                    {
+                        if(element != 0)
+                        {
+                            // Compute the normalized deviation from the center pixel range: (pixel - center pixel)/center pixel
+                            // Threshold so only background points are ignored (only keep foreground points)
+                            element = std::max(-0.01f, (element - range_img.at<float>(i,j)))/element;
+                        }
+                    }
+
+                    // Sum the normalized deviation
+                    float sum = std::inner_product(std::begin(data_vec), std::end(data_vec), std::begin(kernel_vec), 0.0);
+
+                    float cnt_nonzero = std::count_if(data_vec.begin(), data_vec.end(),[&](float const& val){ return val != 0; });
+
+                    // Divide the sum of normalized deviation by the number of value returns in the 5x5 box (ignore 0’s)
+                    float avgval = sum / cnt_nonzero;
+
+                    filtered_img.at<float>(i,j) = avgval;
+                    
+                }
+            }
+        }
+
+        cv::threshold(filtered_img, filter_img, fog_min_range_deviation_, 1.0, THRESH_TOZERO);
+
+    }
+
 }
 
 // Register nodelet
