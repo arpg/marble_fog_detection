@@ -39,10 +39,6 @@ namespace fog
 
         // Publish Point Cloud
         pub_conf_pcl_               = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
-        pub_avg_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_avg_range_img", 10);
-        pub_sum_noreturn_img_       = private_nh.advertise<sensor_msgs::Image>("out_sum_noreturn_img", 10);
-        pub_dev_range_img_          = private_nh.advertise<sensor_msgs::Image>("out_dev_range_img", 10);
-        pub_noreturn_lowres_img_    = private_nh.advertise<sensor_msgs::Image>("out_noreturn_lowres_img", 10);
         pub_range_img_              = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
         pub_intensity_img_          = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
 
@@ -141,7 +137,6 @@ namespace fog
     void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
     {
 
-
         // // Note roll and pitch are intentionally backwards due to the image frame to boldy frame transform_pcl. The IMU transform_pcl converts from body to world frame.
         // tf::Transform transform_pcl;
         // transform_pcl.setRotation(tf::createQuaternionFromRPY(transform_pcl_roll_, transform_pcl_pitch_, transform_pcl_yaw_));
@@ -185,15 +180,13 @@ namespace fog
             int H = 64;
             int W = 1024;
             cv::Mat range_img(H, W, CV_32FC1, 0.0);
-            getDepthImage(cloud_in2, range_img);
+            getDepthImageCPFL(cloud_in2, range_img);
 
         }
 
         if(range_pcl == 1)
         {
             // start 0.038118956 seconds
-            ouster_ros::OS1::CloudOS1 cloud_in{};
-            pcl::fromROSMsg(*cloud_in_ros, cloud_in);
 
             pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
@@ -235,59 +228,35 @@ namespace fog
             cv::Mat dev_range_bin_img(H, W, CV_32FC1, 0.0);
             cv::Mat return_img(H, W, CV_32FC1, 0.0);
             cv::Mat return_sum_img(H, W, CV_32FC1, 0.0);
-            cv::Mat noreturn_img(H, W, CV_32FC1, 0.0);
 
             cv::Mat zero_range_msk(H, W, CV_32FC1, 0.0);
 
-            float dist = 0;
-            float max_dist = 0;
-            float last_dist = 0;
+            getDepthImageOfficial(cloud_in_ros, range_img);
 
-            // NOTE: XYZ --> NWU (os1_lidar frame), indices start at NORTH and rotate CLOCKWISE
-            // NOTE: Azim angle should be -180 ... 0 ... 180
+            // DEBUG: Print azim and elev angles of each point
 
-            // NOTE: AZIMUTHAL ANGLES IN EACH COLUMN
-            // NOTE:    COLUMN 0, COLUMN 1, ..., COLUMN 502, COLUMN 503, COLUMN 504, COLUMN 505, ..., COLUMN 1022, COLUMN 1023
-            // NOTE:    -3.113,   -3.46456, ..., -179.59612, -179.94768,  179.70076,   179.3492, ...,    -2.40732,    -2.75888
-            for (int u = 0; u < H; u++) {
-                for (int v = 0; v < W; v++) {
-                    const size_t vv = (v + px_offset[u]) % W;
-                    const size_t index = vv * H + u;
-                    const auto& pt = cloud_in[index];
-                    x_img.at<float>(u,v) = pt.x; // Physical x-coordinate (NORTH)
-                    y_img.at<float>(u,v) = pt.y; // Physical y-coordinate (WEST)
-                    z_img.at<float>(u,v) = pt.z; // Physical z-coordinate (UP)
-                    range_img.at<float>(u,v) = pt.range * 1e-3; // Physical range from 0 - 100 m (converting from mm --> m)
-                    // range_img.at<float>(u,v) = pt.range * 5e-3; // Range for 8-bit image from 0 - 255
-                    noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
-                    intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
-                }
-            }
+            // float x_val;
+            // float y_val;
+            // std::vector<double> azim_val(W);
+            // std::vector<double> elev_val(H);
 
-            std::cout << "------------------------ BEGIN LOOP ------------------------" << std::endl;
-
-            float x_val;
-            float y_val;
-            std::vector<double> azim_val(W);
-            std::vector<double> elev_val(H);
-
-            for (int i = 0; i < W; i++)
-            {
-                azim_val[i] = atan2(y_img.at<float>(0,i), -x_img.at<float>(0,i)) * 180 / M_PI;
-            }
-            for (int i = 0; i < H; i++)
-            {
-                elev_val[i] = atan2(z_img.at<float>(i,40), sqrt(x_img.at<float>(i,40) * x_img.at<float>(i,40) 
-                                                              + y_img.at<float>(i,40) * y_img.at<float>(i,40))) * 180 / M_PI;
-            } 
+            // for (int i = 0; i < W; i++)
+            // {
+            //     azim_val[i] = atan2(y_img.at<float>(0,i), -x_img.at<float>(0,i)) * 180 / M_PI;
+            // }
+            // for (int i = 0; i < H; i++)
+            // {
+            //     elev_val[i] = atan2(z_img.at<float>(i,40), sqrt(x_img.at<float>(i,40) * x_img.at<float>(i,40) 
+            //                                                   + y_img.at<float>(i,40) * y_img.at<float>(i,40))) * 180 / M_PI;
+            // } 
             
-            std::cout << "The azimuthal angles are : " << std::endl;
-            for(int i=0; i < azim_val.size(); i++)
-            {
-                std::cout << azim_val.at(i) << ' ';
-            };
+            // std::cout << "The azimuthal angles are : " << std::endl;
+            // for(int i=0; i < azim_val.size(); i++)
+            // {
+            //     std::cout << azim_val.at(i) << ' ';
+            // };
 
-            std::cout << "Point " << 10 << " / X " << x_img.at<float>(10,40) << " / Y " << y_img.at<float>(10,40) << " / Z " << "Azim Angle " << azim_val[9] <<  " / Elev Angle "  << elev_val[39] << std::endl;
+            // std::cout << "Point " << 10 << " / X " << x_img.at<float>(10,40) << " / Y " << y_img.at<float>(10,40) << " / Z " << "Azim Angle " << azim_val[9] <<  " / Elev Angle "  << elev_val[39] << std::endl;
 
             // std::cout << "The elevation angles are : " << std::endl;
             // for(int i=0; i < elev_val.size(); i++)
@@ -305,11 +274,8 @@ namespace fog
             }
             else
             {
-                               
                 // Binarize depth (range) image
-                cv::threshold(range_img, return_img, 0.0, 1.0, THRESH_BINARY);
-
-                // cv::blur(range_img, mean_s_img, cv::Size(9,9)); //Or whatever blurring you want
+                cv::threshold(range_img, return_img, 0.10, 1.0, THRESH_BINARY);
 
                 // Average range image
                 cv::boxFilter(range_img, avg_range_img, -1, cv::Size(5,5), cv::Point(-1,-1), false); // do not normalize here
@@ -326,9 +292,6 @@ namespace fog
 
                 // Subtract range image from average range image, binarize as pre-filter
                 cv::threshold(avg_range_img - range_img, dev_range_bin_img, 0.10, 1.0, THRESH_BINARY);
-
-                // Compute binary no-return image (1 = no return, 0 = return)
-                cv::threshold(range_img, noreturn_img, 0.2, 1.0, THRESH_BINARY_INV);
                 
                 double min = 0, max = 0;
                 cv::Point minLoc(-1, -1), maxLoc(-1, -1);
@@ -337,22 +300,14 @@ namespace fog
             }
 
             // Publish Range Image
-            cv_bridge::CvImage new_range_msg;
-            new_range_msg.encoding                  = sensor_msgs::image_encodings::TYPE_32FC1;
-            new_range_msg.image                     = range_img;
-            new_range_msg.header.stamp              = ros::Time::now();
-            new_range_msg.header.frame_id           = cloud_in_ros->header.frame_id;        
-            pub_range_img_.publish(new_range_msg.toImageMsg());
-
-            // Publish Range Deviation Image
-            cv_bridge::CvImage dev_range_msg;
-            dev_range_msg.encoding                   = sensor_msgs::image_encodings::TYPE_32FC1;
-            dev_range_msg.image                      = dev_range_img;
-            dev_range_msg.header.stamp               = ros::Time::now();
-            dev_range_msg.header.frame_id            = cloud_in_ros->header.frame_id;        
-            pub_dev_range_img_.publish(dev_range_msg.toImageMsg());
+            cv_bridge::CvImage range_msg;
+            range_msg.encoding                      = sensor_msgs::image_encodings::TYPE_32FC1;
+            range_msg.image                         = return_img;
+            range_msg.header.stamp                  = ros::Time::now();
+            range_msg.header.frame_id               = cloud_in_ros->header.frame_id;        
+            pub_range_img_.publish(range_msg.toImageMsg());
             
-            last_range_img          = range_img;
+            last_range_img                          = range_img;
 
             // Image Filter
 
@@ -425,28 +380,6 @@ namespace fog
 
                         filtered_img.at<float>(i,j) = avgval;
                         
-                        // std::cout << "data_vec: ";
-                        // for (auto i : data_vec) std::cout << i << ' ';
-                        // std::cout << '\n';
-
-                        // std::cout << "pixel_vec: ";
-                        // for (auto i : pixel_vec) std::cout << i << ' ';
-                        // std::cout << '\n';
-
-                        // std::cout << "kernel_vec: ";
-                        // for (auto i : kernel_vec) std::cout << i << ' ';
-                        // std::cout << '\n';
-
-                        // std::cout << "dot_product: " << sum;
-                        // std::cout << '\n';
-
-                        // std::cout << "cnt_nonzero: " << cnt_nonzero;
-                        // std::cout << '\n';
-
-                        // std::cout << "avgval: " << avgval;
-                        // std::cout << '\n';
-
-                        // std::cout << '\n';
                     }
                 }
             }
@@ -530,12 +463,10 @@ namespace fog
             output->height = 1;
             output->is_dense = true;
 
-            seq++;
             output->header.seq = seq;
             output->header.frame_id = cloud_in2->header.frame_id;
             pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
             pub_conf_pcl_.publish (output);
-
 
             // end 0.000119647 seconds
 
@@ -553,6 +484,8 @@ namespace fog
             // // To get the value of duration use the count()
             // // member function on the duration object
             // std::cout << "\n" << duration.count() << "\n" << std::endl;
+
+            seq++;
 
         }
     
@@ -652,7 +585,7 @@ namespace fog
     } 
 
     // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
-    void FogDetectionNodelet::getDepthImage(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img)
+    void FogDetectionNodelet::getDepthImageCPFL(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img)
     {
         
         // X: NORTH
@@ -717,14 +650,50 @@ namespace fog
         new_range_msg.header.frame_id           = cloud_in2->header.frame_id;        
         pub_range_img_.publish(new_range_msg.toImageMsg());
         
-        seq++;
-
         return;
 
     } 
 
 
+    // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
+    void FogDetectionNodelet::getDepthImageOfficial(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros,
+                                                    cv::Mat &range_img)
+    {
 
+        // start 0.038118956 seconds
+        ouster_ros::OS1::CloudOS1 cloud_in{};
+        pcl::fromROSMsg(*cloud_in_ros, cloud_in);
+        
+        // Get PCL metadata
+        int W = cloud_in_ros->width;
+        int H = cloud_in_ros->height;
+        std::vector<int>  px_offset = ouster::OS1::get_px_offset(W);
+        // for 64 channels, the px_offset =[ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
+        //                                   0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
+
+        // NOTE: XYZ --> NWU (os1_lidar frame), indices start at NORTH and rotate CLOCKWISE
+        // NOTE: Azim angle should be -180 ... 0 ... 180
+
+        // NOTE: AZIMUTHAL ANGLES IN EACH COLUMN
+        // NOTE:    COLUMN 0, COLUMN 1, ..., COLUMN 502, COLUMN 503, COLUMN 504, COLUMN 505, ..., COLUMN 1022, COLUMN 1023
+        // NOTE:    -3.113,   -3.46456, ..., -179.59612, -179.94768,  179.70076,   179.3492, ...,    -2.40732,    -2.75888
+
+        for (int u = 0; u < H; u++) {
+            for (int v = 0; v < W; v++) {
+                const size_t vv = (v + px_offset[u]) % W;
+                const size_t index = vv * H + u;
+                const auto& pt = cloud_in[index];
+                // x_img.at<float>(u,v) = pt.x; // Physical x-coordinate (NORTH)
+                // y_img.at<float>(u,v) = pt.y; // Physical y-coordinate (WEST)
+                // z_img.at<float>(u,v) = pt.z; // Physical z-coordinate (UP)
+                range_img.at<float>(u,v) = pt.range * 1e-3; // Physical range from 0 - 100 m (converting from mm --> m)
+                // range_img.at<float>(u,v) = pt.range * 5e-3; // Range for 8-bit image from 0 - 255
+                // noise_image.data[u * W + v] = std::min(pt.noise, (uint16_t)255);
+                // intensity_image.data[u * W + v] = std::min(pt.intensity, 255.f);
+            }
+        }
+
+    } 
 }
 
 // Register nodelet

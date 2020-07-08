@@ -95,25 +95,9 @@ namespace fog
       ros::Subscriber sub_intensity_img_;
       ros::Subscriber sub_low_depth_pcl_;
 
-      ros::Publisher pub_output_;
       ros::Publisher pub_conf_pcl_;
-
       ros::Publisher pub_range_img_;
-      ros::Publisher pub_avg_range_img_;
-      ros::Publisher pub_diff_range_img_;
-      ros::Publisher pub_dev_range_img_;
-      ros::Publisher pub_dev_diff_range_img_;
-
-      ros::Publisher pub_var_t_img_;
-      ros::Publisher pub_var_s_img_;
-
-      ros::Publisher pub_prob_noreturn_img_;
-      ros::Publisher pub_noreturn_img_;
-      ros::Publisher pub_noreturn_lowres_img_;
       ros::Publisher pub_intensity_img_;
-
-      ros::Publisher pub_var_range_img_;
-      ros::Publisher pub_sum_noreturn_img_;
 
       ros::NodeHandle nh;
       ros::NodeHandle private_nh;
@@ -159,7 +143,10 @@ namespace fog
 
     void linearSpacedArray(std::vector<double> &xs, double a, double b, std::size_t N);
 
-    void getDepthImage(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img);
+    void getDepthImageCPFL(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img);
+
+    void getDepthImageOfficial(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros,
+                               cv::Mat &range_img);
 
     private:
 

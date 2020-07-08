@@ -6,15 +6,15 @@
   <arg name="start_time" default="0" />
   <arg name="rate" default="1.0" /> <!-- normal_pcl can only run at 0.08 or slower -->
 
-  <arg name="bags" default=
+  <!-- <arg name="bags" default=
     "/home/erush91/data/NIOSH/TUNNEL_DEPLOYMENT_3/H02/camera_fwd_rgb_full.bag
      /home/erush91/data/NIOSH/TUNNEL_DEPLOYMENT_3/H02/imu_ouster_2019-08-20-14-02-24_full.bag
      /home/erush91/data/NIOSH/TUNNEL_DEPLOYMENT_3/H02/outputs_2019-08-20-14-02-24_full.bag">
-  </arg>
-
-  <!-- <arg name="bags" default=
-    "/home/erush91/data/radar/fog_garage_artifacts_0.bag">
   </arg> -->
+
+  <arg name="bags" default=
+    "/home/erush91/data/radar/fog_garage_artifacts_0.bag">
+  </arg>
 
   <!-- <arg name="bags" default=
     "/home/erush91/data/ouster/fog/fog_ouster_garage_2020-03-31-14-47-44.bag">
@@ -33,18 +33,18 @@
      /media/erush91/3804b1f8-702a-4016-9f15-ea71548f9c72/DEPLOYMENT2_BETA_FEB22/H01/sensor_data_2020-02-22-13-10-24_2.bag">
   </arg> -->
 
+  
+  <!-- <arg name="viz" default=
+    "/home/erush91/catkin_ws/src/fog_detection/rviz/H02_NIOSH.rviz">
+  </arg> -->
+
+  <arg name="viz" default=
+    "/home/erush91/catkin_ws/src/fog_detection/rviz/fog_garage.rviz">
+  </arg>
+  
   <!-- <arg name="viz" default=
     "/home/erush91/catkin_ws/src/fog_detection/rviz/H01_SATSOP.rviz">
   </arg> -->
-  
-  <arg name="viz" default=
-    "/home/erush91/catkin_ws/src/fog_detection/rviz/H02_NIOSH.rviz">
-  </arg>
-
-  <!-- <arg name="viz" default=
-    "/home/erush91/catkin_ws/src/fog_detection/rviz/fog_garage.rviz">
-  </arg> -->
-  
   
   
     <!-- "/home/erush91/catkin_ws/src/fog_detection/rviz/fog_garage.rviz"> -->
