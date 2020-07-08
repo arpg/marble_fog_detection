@@ -12,7 +12,7 @@
     <node type="point_cloud2_assembler" pkg="laser_assembler"  name="pcl_assembler_server">
         <remap from="cloud" to="/fog_detection/out_conf_pcl"/> <!-- os1_cloud_node/points -->
         <param name="max_clouds" type="int" value="100" />
-        <param name="fixed_frame" type="string" value="os1_lidar" /> <!-- os1_lidar -->
+        <param name="fixed_frame" type="string" value="map" /> <!-- os1_lidar -->
     </node>
 
     <node name="pcl_assembler_client" pkg="spin_lidar" type="pcl_assembler_client" output="screen" >

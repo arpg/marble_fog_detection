@@ -123,30 +123,22 @@ namespace fog
       void intensity_image_cb(const sensor_msgs::ImageConstPtr& image_msg);
       void point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& msg);
 
-      void analyze_range_images(const sensor_msgs::ImageConstPtr& in_msg,
-                                const ros::Publisher pub_img_,
-                                int x_offset,
-                                int y_offset,
-                                int width,
-                                int height);
-
-      void analyze_intensity_images(const sensor_msgs::ImageConstPtr& in_msg,
-                                    const ros::Publisher pub_img_,
-                                    int x_offset,
-                                    int y_offset,
-                                    int width,
-                                    int height);
-
       double binarySearch(std::vector<double>& array, const double value, const double threshold);
 
       void linearSpacedArray(std::vector<double> &xs, double a, double b, std::size_t N);
 
-      void getDepthImageCPFL(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img);
+      void getDepthImageCPFL(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img, cv::Mat &index_img);
 
       void getDepthImageOfficial(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros,
                                 cv::Mat &range_img);
 
       void getFogFilterImage(cv::Mat &range_img, cv::Mat &filter_img);
+
+      void labelFogInliersFilterPCL(pcl::PointXYZI search_pt,
+                                    pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2,
+                                    pcl::PointIndices::Ptr inliers, 
+                                    pcl::KdTreeFLANN<pcl::PointXYZI> kdtree,
+                                    int i);
 
     private:
 

@@ -146,15 +146,14 @@ namespace fog
 
         if(range_pcl == 0)
         {
-
             pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
             
             int H = 64;
             int W = 1024;
             cv::Mat range_img(H, W, CV_32FC1, 0.0);
-            getDepthImageCPFL(cloud_in2, range_img);
-
+            cv::Mat index_img(H, W, CV_32FC1, 0.0);
+            getDepthImageCPFL(cloud_in2, range_img, index_img);
         }
 
         if(range_pcl == 1)
@@ -280,35 +279,7 @@ namespace fog
                         const size_t vv = (v + px_offset[u]) % W;
                         const size_t i = vv * H + u;
                         search_pt = cloud_in2->points[i];
-
-                        // If the point is withint the intensity band of fog, then check out it's neighbors
-                        if(search_pt.intensity > 10 && search_pt.intensity < 100)
-                        {
-                            // Neighbors within radius search
-                            std::vector<int> pointIdxRadiusSearch;
-                            std::vector<float> pointRadiusSquaredDistance;
-                            
-                            // If it has neighbors
-                            if (kdtree.radiusSearch (search_pt, fog_radius_high_intensity_, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0)
-                            {
-                                // Iterate over neighbors, and disregard if its neighbors have high-intensity points
-                                flag_fog = 1;
-                                for (size_t i = 0; i < pointIdxRadiusSearch.size (); ++i)
-                                {
-                                    if(cloud_in2->points[ pointIdxRadiusSearch[i] ].intensity > 100)
-                                    {
-                                        flag_fog = 0;
-                                    }
-                                }
-                                // If all neighbors are in intensity band of fog, then include this point in the fog pcl
-                                if(flag_fog == 1)
-                                {
-                                    inliers->indices.push_back(i);
-                                }
-                            }
-
-                        }
-
+                        labelFogInliersFilterPCL(search_pt, cloud_in2, inliers, kdtree, i);
                     }
                 }
             }
@@ -349,40 +320,8 @@ namespace fog
             // std::cout << "\n" << duration.count() << "\n" << std::endl;
 
             seq++;
-
         }
     
-    };
-
-    void FogDetectionNodelet::analyze_intensity_images(const sensor_msgs::ImageConstPtr& in_msg,
-                                                       const ros::Publisher pub_img_,
-                                                       int x_offset,
-                                                       int y_offset,
-                                                       int width,
-                                                       int height)
-    {
-
-        // Get cropping parameters
-        int max_width = in_msg->width - x_offset;
-        int max_height = in_msg->height - y_offset;
-        if (width == 0 || width > max_width)
-            width = max_width;
-        if (height == 0 || height > max_height)
-            height = max_height;
-
-        // Convert from ROS to OpenCV
-        CvImageConstPtr source = toCvShare(in_msg);
-
-        // Crop image
-        cv::Mat new_intensity_img = source->image(cv::Rect(x_offset, y_offset, width, height));
-
-        // The intensity image is of type CV_8UC1/mono8 (0-255)
-        new_intensity_img.convertTo(new_intensity_img, CV_32FC1, 0.39215686274);
-
-        cv::Mat diff_intensity_img = abs(new_intensity_img - last_intensity_img);
-
-        last_intensity_img = new_intensity_img;
-
     };
 
     double FogDetectionNodelet::binarySearch(std::vector<double>& array, const double value, const double threshold) 
@@ -417,7 +356,7 @@ namespace fog
     } 
 
     // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
-    void FogDetectionNodelet::getDepthImageCPFL(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img)
+    void FogDetectionNodelet::getDepthImageCPFL(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img, cv::Mat &index_img)
     {
         
         // X: NORTH
@@ -461,7 +400,8 @@ namespace fog
                 // DEBUG: Print the LUT input and output to ensure functioning properly
                 // std::cout << azim_angle[i] << " -> " << v << std::endl;
 
-            range_img.at<float>(u,v) = range[i]; // Physical range from 0 - 100 m (converting from mm --> m)
+                range_img.at<float>(u,v) = range[i]; // Physical range from 0 - 100 m (converting from mm --> m)
+                index_img.at<float>(u,v) = i;
             }
             else
             {
@@ -471,16 +411,15 @@ namespace fog
 
             // DEBUG: Print the computed range, azim angle, and elev angles
             // std::cout << "Point " << i << " / X " << pt.x << " / Y " << pt.y << " / Z " << pt.z << " / Range " << range[i] << " / Azim Angle " << azim_angle[i] <<  " / Elev Angle "  << elev_angle[i] << std::endl;
-            
         }
 
         // Publish Range Image
-        cv_bridge::CvImage new_range_msg;
-        new_range_msg.encoding                  = sensor_msgs::image_encodings::TYPE_32FC1;
-        new_range_msg.image                     = range_img;
-        new_range_msg.header.stamp              = ros::Time::now();
-        new_range_msg.header.frame_id           = cloud_in2->header.frame_id;        
-        pub_range_img_.publish(new_range_msg.toImageMsg());
+        cv_bridge::CvImage range_msg;
+        range_msg.encoding                  = sensor_msgs::image_encodings::TYPE_32FC1;
+        range_msg.image                     = range_img;
+        range_msg.header.stamp              = ros::Time::now();
+        range_msg.header.frame_id           = cloud_in2->header.frame_id;        
+        pub_range_img_.publish(range_msg.toImageMsg());
         
         return;
 
@@ -534,11 +473,10 @@ namespace fog
     // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
     void FogDetectionNodelet::getFogFilterImage(cv::Mat &range_img, cv::Mat &filter_img)
     {
-
         cv::Mat return_img(H, W, CV_32FC1, 0.0);
+        cv::Mat avg_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat return_sum_img(H, W, CV_32FC1, 0.0);
         cv::Mat dev_range_img(H, W, CV_32FC1, 0.0);
-        cv::Mat avg_range_img(H, W, CV_32FC1, 0.0);
         cv::Mat dev_range_bin_img(H, W, CV_32FC1, 0.0);
         cv::Mat filtered_img(H, W, CV_32FC1, 0.0);
 
@@ -566,7 +504,6 @@ namespace fog
         // double min = 0, max = 0;
         // cv::Point minLoc(-1, -1), maxLoc(-1, -1);
         
-
         // Image Filter
 
         // compute sum of positive matrix elements
@@ -635,15 +572,49 @@ namespace fog
                     float avgval = sum / cnt_nonzero;
 
                     filtered_img.at<float>(i,j) = avgval;
-                    
                 }
             }
         }
-
         cv::threshold(filtered_img, filter_img, fog_min_range_deviation_, 1.0, THRESH_TOZERO);
-
     }
 
+
+    // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
+    void FogDetectionNodelet::labelFogInliersFilterPCL(pcl::PointXYZI search_pt,
+                                              pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2,
+                                              pcl::PointIndices::Ptr inliers, 
+                                              pcl::KdTreeFLANN<pcl::PointXYZI> kdtree,
+                                              int i)
+    {
+        bool flag_fog;
+
+        // If the point is within the intensity band of fog, then check out it's neighbors
+        if(search_pt.intensity > 10 && search_pt.intensity < 100)
+        {
+            // Neighbors within radius search
+            std::vector<int> pointIdxRadiusSearch;
+            std::vector<float> pointRadiusSquaredDistance;
+            
+            // If it has neighbors
+            if(kdtree.radiusSearch(search_pt, fog_radius_high_intensity_, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0)
+            {
+                // Iterate over neighbors, and disregard if its neighbors have high-intensity points
+                flag_fog = 1;
+                for (size_t i = 0; i < pointIdxRadiusSearch.size (); ++i)
+                {
+                    if(cloud_in2->points[pointIdxRadiusSearch[i]].intensity > 100)
+                    {
+                        flag_fog = 0;
+                    }
+                }
+                // If all neighbors are in intensity band of fog, then include this point in the fog pcl
+                if(flag_fog == 1)
+                {
+                    inliers->indices.push_back(i);
+                }
+            }
+        }
+    }
 }
 
 // Register nodelet
