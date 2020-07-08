@@ -159,6 +159,8 @@ namespace fog
 
     void linearSpacedArray(std::vector<double> &xs, double a, double b, std::size_t N);
 
+    void getDepthImage(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img);
+
     private:
 
       // Depth Camera Frames
