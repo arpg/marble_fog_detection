@@ -58,8 +58,8 @@ namespace fog
         std::cout << "base_link->camera pitch: " << low_pitch << std::endl;
         std::cout << "base_link->camera yaw: " << low_yaw << std::endl;
 
-        int H = 64;
-        int W = 1024;
+        H = 64;
+        W = 1024;
         
         azim_LUT.resize(W);
         float azim_res = ((180) - (-180) ) / W;
@@ -153,7 +153,70 @@ namespace fog
             int W = 1024;
             cv::Mat range_img(H, W, CV_32FC1, 0.0);
             cv::Mat index_img(H, W, CV_32FC1, 0.0);
+            cv::Mat filter_img(H, W, CV_32FC1, 0.0);
+
             getDepthImageCPFL(cloud_in2, range_img, index_img);
+
+            getFogFilterImage(range_img, filter_img);
+
+            // end 0.02977038 seconds
+            // start 0.025598312 seconds
+
+            // Extract PCL Indices
+            
+            // Try to publish half of the point cloud
+            pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
+            pcl::ExtractIndices<pcl::PointXYZI> extract;
+
+            // https://vml.sakura.ne.jp/koeda/PCL/tutorials/html/kdtree_search.html
+            pcl::KdTreeFLANN<pcl::PointXYZI> kdtree;
+            kdtree.setInputCloud (cloud_in2);
+            pcl::PointXYZI search_pt;
+            bool flag_fog;
+
+            // end 0.025598312 seconds            
+            // start 0.004650553 seconds
+
+
+            int ii = 0;
+            // Iterate through the depth image
+            for (int u = 0; u < H; u++)
+            {
+                for (int v = 0; v < W; v++)
+                {
+                    // If the pixel is 0.1m closer than the surrounding backgroud pixels, investigate:
+                    if(filter_img.at<float>(u,v) > 0.1)
+                    {
+                        ii++;
+                        const size_t i = index_img.at<float>(u,v);
+                        search_pt = cloud_in2->points[i];
+                        labelFogInliersFilterPCL(search_pt, cloud_in2, inliers, kdtree, i);
+                        // std::cout << "accum count: " << ii << std::endl;
+                        // std::cout << "inliers->indices.size(): " << inliers->indices.size() << std::endl;
+                    }
+                }
+            }
+
+            // // end 0.004650553 seconds
+            // // start 0.000119647 seconds
+            
+            extract.setInputCloud(cloud_in2);
+            extract.setIndices(inliers);
+            extract.setNegative(false);
+            pcl::PointCloud<pcl::PointXYZI>::Ptr output(new pcl::PointCloud<pcl::PointXYZI>);
+            extract.filter(*output);
+            
+            output->width = output->points.size();
+            output->height = 1;
+            output->is_dense = true;
+
+            output->header.seq = seq;
+            output->header.frame_id = cloud_in2->header.frame_id;
+            pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
+            pub_conf_pcl_.publish (output);
+
+            seq++;
+
         }
 
         if(range_pcl == 1)
@@ -422,7 +485,6 @@ namespace fog
         pub_range_img_.publish(range_msg.toImageMsg());
         
         return;
-
     } 
 
 
@@ -575,6 +637,7 @@ namespace fog
                 }
             }
         }
+
         cv::threshold(filtered_img, filter_img, fog_min_range_deviation_, 1.0, THRESH_TOZERO);
     }
 
@@ -589,7 +652,7 @@ namespace fog
         bool flag_fog;
 
         // If the point is within the intensity band of fog, then check out it's neighbors
-        if(search_pt.intensity > 10 && search_pt.intensity < 100)
+        if(search_pt.intensity > 0.04 && search_pt.intensity < 0.11)
         {
             // Neighbors within radius search
             std::vector<int> pointIdxRadiusSearch;
@@ -602,7 +665,7 @@ namespace fog
                 flag_fog = 1;
                 for (size_t i = 0; i < pointIdxRadiusSearch.size (); ++i)
                 {
-                    if(cloud_in2->points[pointIdxRadiusSearch[i]].intensity > 100)
+                    if(cloud_in2->points[pointIdxRadiusSearch[i]].intensity > 0.11)
                     {
                         flag_fog = 0;
                     }
