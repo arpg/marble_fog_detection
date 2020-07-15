@@ -28,9 +28,14 @@ namespace fog
 
         // Make sure we don't enter connectCb() between advertising and assigning to pub_h_scans_
         boost::lock_guard<boost::mutex> lock(connect_mutex_);
-        image_transport::TransportHints hints("raw", ros::TransportHints(), getPrivateNodeHandle());
 
-        sub_pcl_                    = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
+        ros::SubscribeOptions ops;
+        ops.template init<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
+        ops.transport_hints = ros::TransportHints();
+        ops.allow_concurrent_callbacks = true;
+        sub_pcl_                    = nh.subscribe(ops);
+
+        // sub_pcl_                    = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
 
         // Publish Point Cloud
         pub_conf_pcl_               = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
@@ -38,7 +43,6 @@ namespace fog
         pub_intensity_img_          = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
 
         // Create static tf broadcaster (-30 pitch, Realsense pointed down)
-        // rosrun tf static_transform_publisher 0.0 0.0 0.0 0.0 -0.00913852259 0.0 base_link royale_camera_optical_frame 1000
 
         try
         {
@@ -174,9 +178,8 @@ namespace fog
             pcl::PointXYZI search_pt;
             bool flag_fog;
 
-            // end 0.025598312 seconds            
+            // end 0.025598312 seconds
             // start 0.004650553 seconds
-
 
             int ii = 0;
             // Iterate through the depth image
@@ -434,7 +437,6 @@ namespace fog
         std::vector<double> azim_angle(cloud_in2->points.size());
         std::vector<double> elev_angle(cloud_in2->points.size());
 
-
         int u;
         int v;
 
@@ -457,7 +459,7 @@ namespace fog
 
                 u = (64-1) - binarySearch(elev_LUT, elev_angle[i], 0.528/2.0);
                 // DEBUG: Print the LUT input and output to ensure functioning properly
-                // std::cout << elev_angle[i] << " -> " << u << std::endl;
+                // std::cout << elev_angle[i] << " -> " << u << std::endl; 
                 
                 v = binarySearch(azim_LUT, azim_angle[i], 0.36/2.0);
                 // DEBUG: Print the LUT input and output to ensure functioning properly
@@ -485,8 +487,7 @@ namespace fog
         pub_range_img_.publish(range_msg.toImageMsg());
         
         return;
-    } 
-
+    }
 
     // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
     void FogDetectionNodelet::getDepthImageOfficial(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros,
