@@ -1,55 +1,4 @@
 <launch>
-    <!-- <group ns="A01"> -->
-
-        <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
-        <node pkg="nodelet" type="nodelet" name="voxel_grid_x" args="load pcl/VoxelGrid standalone_nodelet" respawn="true" >
-            <remap from="~input" to="/H02/ouster_driver/points"/>
-            <remap from="~voxel_grid/output" to="voxel_grid_x/output"/>
-            <rosparam>
-                filter_field_name: x <!-- Depth -->
-                filter_limit_min: -10.0
-                filter_limit_max:  10.0
-                filter_limit_negative: False
-                leaf_size: 0.1
-            </rosparam>
-        </node>
-
-        <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
-        <node pkg="nodelet" type="nodelet" name="voxel_grid_y" args="load pcl/VoxelGrid standalone_nodelet" respawn="true" >
-            <remap from="~input" to="voxel_grid_x/output"/>
-            <remap from="~voxel_grid/output" to="voxel_grid_y/output"/>
-            <rosparam>
-                filter_field_name: y <!-- Depth -->
-                filter_limit_min: -10.0
-                filter_limit_max:  10.0
-                filter_limit_negative: False
-                leaf_size: 0.1
-            </rosparam>
-        </node>
-
-
-        <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
-        <node pkg="nodelet" type="nodelet" name="voxel_grid_z" args="load pcl/VoxelGrid standalone_nodelet" respawn="true" >
-            <remap from="~input" to="voxel_grid_y/output"/>
-            <remap from="~voxel_grid/output" to="voxel_grid_z/output"/>
-            <rosparam>
-                filter_field_name: y <!-- Depth -->
-                filter_limit_min: -10.0
-                filter_limit_max:  10.0
-                filter_limit_negative: False
-                leaf_size: 0.1
-            </rosparam>
-        </node>
-
-        <!-- Run a StatisticalOutlierRemoval filter to clean NaNs and downsample the data -->
-        <node pkg="nodelet" type="nodelet" name="sor" args="load pcl/StatisticalOutlierRemoval standalone_nodelet"  respawn="true">
-            <remap from="~input" to="/voxel_grid_z/output"/>
-            <rosparam>
-                mean_k: 50
-                stddev:  2.0
-                negative:  True
-            </rosparam>
-        </node>
 
         <node pkg="nodelet" type="nodelet" name="standalone_nodelet" args="manager" output="screen" />
         
@@ -81,5 +30,4 @@
             </rosparam>
         </node>
 
-    <!-- </group> -->
 </launch>

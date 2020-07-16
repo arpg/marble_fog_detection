@@ -1,0 +1,27 @@
+<launch>
+
+        <node pkg="nodelet" type="nodelet" name="standalone_nodelet" args="manager" output="screen" />
+
+        <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
+        <node pkg="nodelet" type="nodelet" name="pass_through" args="load pcl/PassThrough standalone_nodelet" respawn="true" >
+            <remap from="~input" to="/fog_detection/out_conf_pcl"/>
+            <remap from="~pass_through/output" to="pass_through/output"/>
+            <rosparam>
+                filter_field_name: z
+                filter_limit_min: -0.5
+                filter_limit_max:  2
+                filter_limit_negative: False
+            </rosparam>
+        </node>
+
+        <!-- Run a RadiusOutlierRemoval filter to clean NaNs and downsample the data -->
+        <node pkg="nodelet" type="nodelet" name="ror" args="load pcl/RadiusOutlierRemoval standalone_nodelet" respawn="true">
+            <remap from="~input" to="pass_through/output"/>
+            <rosparam>
+                radius_search: 2.5
+                min_neighbors:  4
+                negative: False
+            </rosparam>
+        </node>
+        
+</launch>

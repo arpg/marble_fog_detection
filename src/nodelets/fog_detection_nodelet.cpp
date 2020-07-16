@@ -1,4 +1,5 @@
 #include <fog_detection/fog_detection.h>
+#include <chrono>
 
 namespace fog
 {
@@ -35,7 +36,7 @@ namespace fog
         // Therefore you need to define your own SubscribeOptions.
         // Here is the code you need to subscribe and allow concurrent callback calls:
         ros::SubscribeOptions ops;
-        ops.template init<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
+        ops.template init<sensor_msgs::PointCloud2>("in_pcl", 10, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
         ops.transport_hints             = ros::TransportHints();
         ops.allow_concurrent_callbacks  = true;
         sub_pcl_                        = nh.subscribe(ops);
@@ -113,28 +114,30 @@ namespace fog
     void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
     {
 
-        // // Note roll and pitch are intentionally backwards due to the image frame to boldy frame transform_pcl. The IMU transform_pcl converts from body to world frame.
-        // tf::Transform transform_pcl;
-        // transform_pcl.setRotation(tf::createQuaternionFromRPY(transform_pcl_roll_, transform_pcl_pitch_, transform_pcl_yaw_));
-        // pcl_ros::transformPointCloud(*cloud_in_filtered, *cloud_in_transformed, transform_pcl);
+        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-        // tf::TransformListener listener;
-        // tf::StampedTransform T_map_os1lidar;
-        // double roll, pitch, yaw;
+        // Note roll and pitch are intentionally backwards due to the image frame to boldy frame transform_pcl. The IMU transform_pcl converts from body to world frame.
+        tf::Transform transform_pcl;
+        transform_pcl.setRotation(tf::createQuaternionFromRPY(transform_pcl_roll_, transform_pcl_pitch_, transform_pcl_yaw_));
+        pcl_ros::transformPointCloud(*cloud_in_filtered, *cloud_in_transformed, transform_pcl);
+
+        tf::TransformListener listener;
+        tf::StampedTransform T_map_os1lidar;
+        double roll, pitch, yaw;
         
-        // try
-        // {
-        //     listener.waitForTransform("/os1_lidar", "/map", ros::Time::now(), ros::Duration(0.05) );
-        //     listener.lookupTransform("/os1_lidar", "/map", ros::Time(0), T_map_os1lidar);
-        //     tf::Matrix3x3 m(T_map_os1lidar.getRotation());
-        //     int solution_number = 1;
-        //     m.getEulerYPR(yaw, pitch, roll, solution_number);
-        // }
-        // catch (tf::TransformException ex)
-        // {
-        //     ROS_WARN("%s",ex.what()); 
-        //     // ros::Duration(0.1).sleep();
-        // }
+        try
+        {
+            listener.waitForTransform("/os1_lidar", "/map", ros::Time::now(), ros::Duration(0.05) );
+            listener.lookupTransform("/os1_lidar", "/map", ros::Time(0), T_map_os1lidar);
+            tf::Matrix3x3 m(T_map_os1lidar.getRotation());
+            int solution_number = 1;
+            m.getEulerYPR(yaw, pitch, roll, solution_number);
+        }
+        catch (tf::TransformException ex)
+        {
+            ROS_WARN("%s",ex.what()); 
+            // ros::Duration(0.1).sleep();
+        }
         
         bool range_pcl = 0;
 
@@ -149,36 +152,45 @@ namespace fog
 
         if(range_pcl == 0)
         {
+
+            // START 0.010 seconds
+            
             pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
-            
-            int H = 64;
-            int W = 1024;
+
+            // END 0.010 seconds
+
+            H = 64;
+            W = 1024;
             cv::Mat range_img(H, W, CV_32FC1, 0.0);
             cv::Mat index_img(H, W, CV_32FC1, 0.0);
             cv::Mat filter_img(H, W, CV_32FC1, 0.0);
 
+            // START 0.050 seconds
+
             getDepthImageCPFL(cloud_in2, range_img, index_img);
+
+            // END 0.050 seconds
+
+            // START 0.012 seconds
 
             getFogFilterImage(range_img, filter_img);
 
-            // end 0.02977038 seconds
-            // start 0.025598312 seconds
+            // END 0.012 seconds
 
-            // Extract PCL Indices
-            
-            // Try to publish half of the point cloud
+            // START 0.016 seconds
+
+            // Extract PCL Indices // https://vml.sakura.ne.jp/koeda/PCL/tutorials/html/kdtree_search.html
             pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-            pcl::ExtractIndices<pcl::PointXYZI> extract;
-
-            // https://vml.sakura.ne.jp/koeda/PCL/tutorials/html/kdtree_search.html
+            pcl::ExtractIndices<pcl::PointXYZI> extract;            
             pcl::KdTreeFLANN<pcl::PointXYZI> kdtree;
             kdtree.setInputCloud (cloud_in2);
             pcl::PointXYZI search_pt;
             bool flag_fog;
 
-            // end 0.025598312 seconds
-            // start 0.004650553 seconds
+            // END 0.016 seconds
+
+            // START 0.003 seconds
 
             int ii = 0;
             // Iterate through the depth image
@@ -198,9 +210,8 @@ namespace fog
                     }
                 }
             }
-
-            // // end 0.004650553 seconds
-            // // start 0.000119647 seconds
+            
+            // END 0.003 seconds
             
             extract.setInputCloud(cloud_in2);
             extract.setIndices(inliers);
@@ -350,7 +361,6 @@ namespace fog
             }
 
             // end 0.004650553 seconds
-            // start 0.000119647 seconds
             
             extract.setInputCloud(cloud_in2);
             extract.setIndices(inliers);
@@ -368,25 +378,15 @@ namespace fog
             pub_conf_pcl_.publish (output);
 
             // end 0.000119647 seconds
-
-            // auto start = high_resolution_clock::now();
-            // auto stop = high_resolution_clock::now();
-
-            // // Subtract stop and start timepoints and
-            // // cast it to required unit. Predefined units
-            // // are nanoseconds, microseconds, milliseconds,
-            // // seconds, minutes, hours. Use duration_cast()
-            // // function.
-
-            // auto duration = duration_cast<nanoseconds>(stop - start);
-
-            // // To get the value of duration use the count()
-            // // member function on the duration object
-            // std::cout << "\n" << duration.count() << "\n" << std::endl;
-
+            
             seq++;
+            // Timing Code
+            // https://stackoverflow.com/questions/2808398/easily-measure-elapsed-time
         }
-    
+
+        // std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        // std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << " [ns]" << std::endl << std::endl;
+            
     };
 
     double FogDetectionNodelet::binarySearch(std::vector<double>& array, const double value, const double threshold) 
