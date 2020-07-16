@@ -7,6 +7,8 @@ Panels:
         - /Global Options1
         - /Grid1
         - /TF1
+        - /TF1/Frames1
+        - /TF1/Tree1
         - /MarkerArray1
         - /Ouster PCL1
         - /PointCloud21
@@ -54,7 +56,7 @@ Visualization Manager:
         Z: 0
       Plane: XY
       Plane Cell Count: 1000
-      Reference Frame: map
+      Reference Frame: ouster_link
       Value: true
     - Class: rviz/TF
       Enabled: true
@@ -64,7 +66,7 @@ Visualization Manager:
         base_footprint:
           Value: false
         base_link:
-          Value: true
+          Value: false
         camera_aft:
           Value: false
         camera_aft_bottom_screw_frame:
@@ -248,7 +250,7 @@ Visualization Manager:
         mast_sensor_rig_link:
           Value: false
         ouster_link:
-          Value: false
+          Value: true
         rear_bumper_link:
           Value: false
         rear_left_wheel_link:
@@ -574,25 +576,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 13.011147499084473
+      Distance: 3.0365076065063477
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: 1.1595985889434814
-        Y: -0.5007708072662354
-        Z: 0.33744481205940247
+        X: 1.1311529874801636
+        Y: -0.10522639006376266
+        Z: -0.3545491695404053
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.45979738235473633
+      Pitch: 0.214797243475914
       Target Frame: imu_viz_link
       Value: Orbit (rviz)
-      Yaw: 3.481841564178467
+      Yaw: 3.3018457889556885
     Saved: ~
 Window Geometry:
   Color Image:

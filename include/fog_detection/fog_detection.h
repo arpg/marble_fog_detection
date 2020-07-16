@@ -73,12 +73,6 @@
 
 #include <chrono> 
 using namespace std::chrono; 
-
-
-typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
-
-typedef PointCloud::Ptr ptr_cloud;
-
 using namespace cv;
 using namespace cv_bridge; // CvImage, toCvShare
 namespace OS1 = ouster::OS1;
@@ -146,15 +140,6 @@ namespace fog
       std::string low_robot_frame;
       std::string low_sensor_frame;
 
-      // Depth Image Parameters
-      int low_camera_pixel_x_offset;
-      int low_camera_pixel_y_offset;
-      int low_camera_pixel_width;
-      int low_camera_pixel_height;
-
-      // Point Cloud Parameters
-      bool low_publish_pointcloud;
-
       tf::TransformListener low_listener;
       tf::StampedTransform low_transform;
       tf::Matrix3x3 low_m_euler;
@@ -180,16 +165,7 @@ namespace fog
       float fog_min_range_deviation_;
       float fog_radius_high_intensity_;
 
-      cv::Mat last_intensity_img;
       cv::Mat last_range_img;
-      cv::Mat last_mean_s_img;
-      cv::Mat last_var_t_img;
-      cv::Mat last_dev_range_img;
-      cv::Mat last_noreturn_img;
-      cv::Mat last_prob_noreturn_img;
-      cv::Mat sum_range_img;
-      cv::Mat acc_noreturn_img;
-      cv::Mat acc2_noreturn_img;
 
       std::vector<double> azim_LUT;
       std::vector<double> elev_LUT;
@@ -197,10 +173,6 @@ namespace fog
       int W;
       int H;
       std::vector<int> px_offset;
-
-
-      pcl::search::Search<pcl::PointXYZ>::Ptr tree_xyz;
-      typedef pcl::PointCloud<pcl::PointXYZINormal> PointCloudOut;
 
   };
 

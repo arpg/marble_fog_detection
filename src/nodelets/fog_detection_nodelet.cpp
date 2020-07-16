@@ -29,16 +29,21 @@ namespace fog
         // Make sure we don't enter connectCb() between advertising and assigning to pub_h_scans_
         boost::lock_guard<boost::mutex> lock(connect_mutex_);
 
+        // https://stackoverflow.com/questions/48497670/multithreading-behaviour-with-ros-asyncspinner/48544551
+        // It is possible to allow concurrent calls by setting the correct 
+        // SubscribeOptions.allow_concurrent_callbacks which is false by default
+        // Therefore you need to define your own SubscribeOptions.
+        // Here is the code you need to subscribe and allow concurrent callback calls:
         ros::SubscribeOptions ops;
         ops.template init<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
-        ops.transport_hints = ros::TransportHints();
-        ops.allow_concurrent_callbacks = true;
-        sub_pcl_                    = nh.subscribe(ops);
+        ops.transport_hints             = ros::TransportHints();
+        ops.allow_concurrent_callbacks  = true;
+        sub_pcl_                        = nh.subscribe(ops);
 
         // sub_pcl_                    = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
 
         // Publish Point Cloud
-        pub_conf_pcl_               = private_nh.advertise<PointCloud>("out_conf_pcl", 10);
+        pub_conf_pcl_               = private_nh.advertise<sensor_msgs::PointCloud2>("out_conf_pcl", 10);
         pub_range_img_              = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
         pub_intensity_img_          = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
 
@@ -93,12 +98,6 @@ namespace fog
         // Depth Camera Parameters
         low_robot_frame            = config.low_robot_frame;
         low_sensor_frame           = config.low_sensor_frame;
-
-        // Depth Image Parameters
-        low_camera_pixel_x_offset  = config.low_camera_pixel_x_offset;
-        low_camera_pixel_y_offset  = config.low_camera_pixel_y_offset;
-        low_camera_pixel_width     = config.low_camera_pixel_width;
-        low_camera_pixel_height    = config.low_camera_pixel_height;
 
         transform_pcl_roll_         = config.transform_pcl_roll;
         transform_pcl_pitch_        = config.transform_pcl_pitch;
