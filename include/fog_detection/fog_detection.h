@@ -164,6 +164,8 @@ namespace fog
       float height_variance_radius_;
       float fog_min_range_deviation_;
       float fog_radius_high_intensity_;
+      float fog_low_intensity_;
+      float fog_high_intensity_;
 
       cv::Mat last_range_img;
 

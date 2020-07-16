@@ -1,6 +1,6 @@
 <launch>
 
-        <node pkg="nodelet" type="nodelet" name="standalone_nodelet" args="manager" output="screen" />
+        <!-- <node pkg="nodelet" type="nodelet" name="standalone_nodelet" args="manager" output="screen" /> -->
 
         <!-- Run a VoxelGrid filter to clean NaNs and downsample the data -->
         <node pkg="nodelet" type="nodelet" name="pass_through" args="load pcl/PassThrough standalone_nodelet" respawn="true" >

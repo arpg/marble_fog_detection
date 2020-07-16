@@ -97,17 +97,13 @@ namespace fog
         config_ = config;
 
         // Depth Camera Parameters
-        low_robot_frame            = config.low_robot_frame;
-        low_sensor_frame           = config.low_sensor_frame;
+        low_robot_frame                 = config.low_robot_frame;
+        low_sensor_frame                = config.low_sensor_frame;
 
-        transform_pcl_roll_         = config.transform_pcl_roll;
-        transform_pcl_pitch_        = config.transform_pcl_pitch;
-        transform_pcl_yaw_          = config.transform_pcl_yaw;
-        normal_radius_              = config.normal_radius;
-        ror_radius_                 = config.ror_radius;
-        ror_min_neighbors_          = config.ror_min_neighbors;
-        fog_min_range_deviation_    = config.fog_min_range_deviation;
-        fog_radius_high_intensity_  = config.fog_radius_high_intensity;
+        fog_min_range_deviation_        = config.fog_min_range_deviation;
+        fog_radius_high_intensity_      = config.fog_radius_high_intensity;
+        fog_low_intensity_              = config.fog_low_intensity;
+        fog_high_intensity_             = config.fog_high_intensity;
         
     };
 
@@ -116,28 +112,28 @@ namespace fog
 
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
-        // Note roll and pitch are intentionally backwards due to the image frame to boldy frame transform_pcl. The IMU transform_pcl converts from body to world frame.
-        tf::Transform transform_pcl;
-        transform_pcl.setRotation(tf::createQuaternionFromRPY(transform_pcl_roll_, transform_pcl_pitch_, transform_pcl_yaw_));
-        pcl_ros::transformPointCloud(*cloud_in_filtered, *cloud_in_transformed, transform_pcl);
+        // // Note roll and pitch are intentionally backwards due to the image frame to boldy frame transform_pcl. The IMU transform_pcl converts from body to world frame.
+        // tf::Transform transform_pcl;
+        // transform_pcl.setRotation(tf::createQuaternionFromRPY(transform_pcl_roll_, transform_pcl_pitch_, transform_pcl_yaw_));
+        // pcl_ros::transformPointCloud(*cloud_in_filtered, *cloud_in_transformed, transform_pcl);
 
-        tf::TransformListener listener;
-        tf::StampedTransform T_map_os1lidar;
-        double roll, pitch, yaw;
+        // tf::TransformListener listener;
+        // tf::StampedTransform T_map_os1lidar;
+        // double roll, pitch, yaw;
         
-        try
-        {
-            listener.waitForTransform("/os1_lidar", "/map", ros::Time::now(), ros::Duration(0.05) );
-            listener.lookupTransform("/os1_lidar", "/map", ros::Time(0), T_map_os1lidar);
-            tf::Matrix3x3 m(T_map_os1lidar.getRotation());
-            int solution_number = 1;
-            m.getEulerYPR(yaw, pitch, roll, solution_number);
-        }
-        catch (tf::TransformException ex)
-        {
-            ROS_WARN("%s",ex.what()); 
-            // ros::Duration(0.1).sleep();
-        }
+        // try
+        // {
+        //     listener.waitForTransform("/os1_lidar", "/map", ros::Time::now(), ros::Duration(0.05) );
+        //     listener.lookupTransform("/os1_lidar", "/map", ros::Time(0), T_map_os1lidar);
+        //     tf::Matrix3x3 m(T_map_os1lidar.getRotation());
+        //     int solution_number = 1;
+        //     m.getEulerYPR(yaw, pitch, roll, solution_number);
+        // }
+        // catch (tf::TransformException ex)
+        // {
+        //     ROS_WARN("%s",ex.what()); 
+        //     // ros::Duration(0.1).sleep();
+        // }
         
         bool range_pcl = 0;
 
@@ -235,7 +231,7 @@ namespace fog
         if(range_pcl == 1)
         {
             // start 0.038118956 seconds
-
+            
             pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
             
@@ -282,6 +278,7 @@ namespace fog
 
             getDepthImageOfficial(cloud_in_ros, range_img);
 
+
             // DEBUG: Print azim and elev angles of each point
 
             // float x_val;
@@ -321,10 +318,12 @@ namespace fog
             // Skip if first frame
             if(last_range_img.size().height > 0)
             {
+                
                 getFogFilterImage(range_img, filter_img);
             }
             
             last_range_img = range_img;
+
 
             // end 0.02977038 seconds
             // start 0.025598312 seconds
@@ -344,6 +343,7 @@ namespace fog
             // end 0.025598312 seconds            
             // start 0.004650553 seconds
 
+
             // Iterate through the depth image
             for (int u = 0; u < H; u++)
             {
@@ -359,6 +359,7 @@ namespace fog
                     }
                 }
             }
+            
 
             // end 0.004650553 seconds
             
@@ -378,6 +379,7 @@ namespace fog
             pub_conf_pcl_.publish (output);
 
             // end 0.000119647 seconds
+            
             
             seq++;
             // Timing Code
@@ -652,7 +654,8 @@ namespace fog
         bool flag_fog;
 
         // If the point is within the intensity band of fog, then check out it's neighbors
-        if(search_pt.intensity > 0.04 && search_pt.intensity < 0.11)
+        // if(search_pt.intensity > 0.04 && search_pt.intensity < 0.11)
+        if(search_pt.intensity > fog_low_intensity_ && search_pt.intensity < fog_high_intensity_)
         {
             // Neighbors within radius search
             std::vector<int> pointIdxRadiusSearch;
@@ -665,7 +668,8 @@ namespace fog
                 flag_fog = 1;
                 for (size_t i = 0; i < pointIdxRadiusSearch.size (); ++i)
                 {
-                    if(cloud_in2->points[pointIdxRadiusSearch[i]].intensity > 0.11)
+                    if(cloud_in2->points[pointIdxRadiusSearch[i]].intensity < fog_low_intensity_ ||
+                       cloud_in2->points[pointIdxRadiusSearch[i]].intensity > fog_high_intensity_)
                     {
                         flag_fog = 0;
                     }
