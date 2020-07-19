@@ -27,7 +27,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: ""
+    SyncSource: RGB Image
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -64,6 +64,10 @@ Visualization Manager:
           Value: false
         body_aligned_imu_link:
           Value: false
+        camera_fwd_aligned_depth_to_color_frame:
+          Value: true
+        camera_fwd_aligned_depth_to_infra1_frame:
+          Value: true
         camera_fwd_bottom_screw_frame:
           Value: false
         camera_fwd_color_frame:
@@ -84,6 +88,10 @@ Visualization Manager:
           Value: false
         camera_fwd_link:
           Value: false
+        camera_low_aligned_depth_to_color_frame:
+          Value: true
+        camera_low_aligned_depth_to_infra1_frame:
+          Value: true
         camera_low_bottom_screw_frame:
           Value: false
         camera_low_color_frame:
@@ -104,6 +112,10 @@ Visualization Manager:
           Value: false
         camera_low_link:
           Value: false
+        camera_pt_aligned_depth_to_color_frame:
+          Value: true
+        camera_pt_aligned_depth_to_infra1_frame:
+          Value: true
         camera_pt_bottom_screw_frame:
           Value: false
         camera_pt_color_frame:
@@ -136,6 +148,8 @@ Visualization Manager:
           Value: false
         laser:
           Value: false
+        map:
+          Value: true
         os1_imu:
           Value: false
         os1_lidar:
@@ -172,7 +186,93 @@ Visualization Manager:
       Show Axes: true
       Show Names: true
       Tree:
-        {}
+        map:
+          body_aligned_imu_link:
+            base_link:
+              base_footprint:
+                {}
+              front_bumper_link:
+                {}
+              inertial_link:
+                {}
+              laser:
+                {}
+              rear_bumper_link:
+                {}
+              top_chassis_link:
+                {}
+              top_plate_link:
+                top_plate_front_link:
+                  {}
+                top_plate_rear_link:
+                  {}
+              user_rail_link:
+                {}
+            camera_fwd_bottom_screw_frame:
+              camera_fwd_link:
+                camera_fwd_aligned_depth_to_color_frame:
+                  camera_fwd_color_optical_frame:
+                    {}
+                camera_fwd_aligned_depth_to_infra1_frame:
+                  camera_fwd_infra1_optical_frame:
+                    {}
+                camera_fwd_color_frame:
+                  {}
+                camera_fwd_depth_frame:
+                  camera_fwd_depth_optical_frame:
+                    {}
+                camera_fwd_infra1_frame:
+                  {}
+                camera_fwd_infra2_frame:
+                  camera_fwd_infra2_optical_frame:
+                    {}
+            camera_low_bottom_screw_frame:
+              camera_low_link:
+                camera_low_aligned_depth_to_color_frame:
+                  {}
+                camera_low_aligned_depth_to_infra1_frame:
+                  {}
+                camera_low_color_frame:
+                  camera_low_color_optical_frame:
+                    {}
+                camera_low_depth_frame:
+                  camera_low_depth_optical_frame:
+                    {}
+                camera_low_infra1_frame:
+                  camera_low_infra1_optical_frame:
+                    {}
+                camera_low_infra2_frame:
+                  camera_low_infra2_optical_frame:
+                    {}
+            imu_link:
+              {}
+            os1_sensor:
+              os1_imu:
+                {}
+              os1_lidar:
+                {}
+            pantilt_base:
+              pantilt_pan:
+                pantilt_tilt:
+                  pantilt_head:
+                    camera_pt_bottom_screw_frame:
+                      camera_pt_link:
+                        camera_pt_aligned_depth_to_color_frame:
+                          {}
+                        camera_pt_aligned_depth_to_infra1_frame:
+                          {}
+                        camera_pt_color_frame:
+                          camera_pt_color_optical_frame:
+                            {}
+                        camera_pt_depth_frame:
+                          camera_pt_depth_optical_frame:
+                            {}
+                        camera_pt_infra1_frame:
+                          camera_pt_infra1_optical_frame:
+                            {}
+                        camera_pt_infra2_frame:
+                          camera_pt_infra2_optical_frame:
+                            {}
       Update Interval: 0
       Value: true
     - Alpha: 1
@@ -210,7 +310,7 @@ Visualization Manager:
       Marker Topic: /H01/trajectory_node_list_throttled
       Name: MarkerArray
       Namespaces:
-        {}
+        Trajectory 0: true
       Queue Size: 100
       Value: true
     - Alpha: 0.699999988079071
@@ -365,25 +465,25 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 12.727802276611328
+      Distance: 6.821551322937012
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
         Swap Stereo Eyes: false
         Value: false
       Focal Point:
-        X: -0.37187376618385315
-        Y: 1.44301176071167
-        Z: 0.7214016318321228
+        X: -0.3959563970565796
+        Y: 0.01593497395515442
+        Z: 1.3485075235366821
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.7797980308532715
+      Pitch: 0.5497985482215881
       Target Frame: base_link
       Value: Orbit (rviz)
-      Yaw: 3.1550257205963135
+      Yaw: 3.175016403198242
     Saved: ~
 Window Geometry:
   Displays:

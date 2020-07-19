@@ -84,17 +84,13 @@ namespace fog
     public:
     
       // ROS communication
-      boost::shared_ptr<image_transport::ImageTransport> it_in_;
       ros::Subscriber sub_pcl_;
-
       ros::Publisher pub_conf_pcl_;
       ros::Publisher pub_range_img_;
       ros::Publisher pub_intensity_img_;
 
       ros::NodeHandle nh;
       ros::NodeHandle private_nh;
-
-      boost::mutex connect_mutex_;
 
       int queue_size_;
       std::string target_frame_id_;
@@ -135,33 +131,7 @@ namespace fog
                                     int i);
 
     private:
-
-      // Depth Camera Frames
-      std::string low_robot_frame;
-      std::string low_sensor_frame;
-
-      tf::TransformListener low_listener;
-      tf::StampedTransform low_transform;
-      tf::Matrix3x3 low_m_euler;
-      tf::Matrix3x3 low_m_inv_euler;
-      double low_roll;
-      double low_pitch;
-      double low_yaw;
-
-      // Point Cloud Sequence
-      long int seq = 0;
-
-      float transform_pcl_roll_;
-      float transform_pcl_pitch_;
-      float transform_pcl_yaw_;
-      float normal_radius_;
-      float intensity_LT_threshold_;
-      float intensity_GT_threshold_;
-      float sor_nearest_neighbors_;
-      float sor_std_dev_multiplier_;
-      float ror_radius_;
-      float ror_min_neighbors_;
-      float height_variance_radius_;
+ 
       float fog_min_range_deviation_;
       float fog_radius_high_intensity_;
       float fog_low_intensity_;
@@ -169,11 +139,19 @@ namespace fog
 
       cv::Mat last_range_img;
 
-      std::vector<double> azim_LUT;
-      std::vector<double> elev_LUT;
-      
+            // If true, Official Ouster ROS driver, publishes pcl with x, y, z, range, noise, ring, reflectivity, and t fields.
+      // If false, CPFL-forked ROS driver, publishes pcl with x, y, z, intensity fields;
+      bool flag_official_ouster_pcl; 
+
+      // Width and height of the point cloud
       int W;
       int H;
+
+      // Look up tables for polar coordinate angle lookups
+      std::vector<double> azim_LUT;
+      std::vector<double> elev_LUT;
+
+      // Pixel offset (only for official Ouster ROS driver)
       std::vector<int> px_offset;
 
   };

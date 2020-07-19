@@ -12,8 +12,6 @@ namespace fog
         nh         = getMTNodeHandle();
         private_nh = getMTPrivateNodeHandle();
 
-        it_in_ .reset(new image_transport::ImageTransport(nh));
-
         // Read parameters
         private_nh.param("queue_size", queue_size_, 5);
         private_nh.param("target_frame_id", target_frame_id_, std::string());
@@ -23,12 +21,56 @@ namespace fog
         ReconfigureServer::CallbackType f = boost::bind(&FogDetectionNodelet::configCb, this, _1, _2);
         reconfigure_server_->setCallback(f);
 
-	    // Monitor whether anyone is subscribed to the h_scans
-        image_transport::SubscriberStatusCallback connect_cb = boost::bind(&FogDetectionNodelet::connectCb, this);
-        ros::SubscriberStatusCallback connect_cb_info = boost::bind(&FogDetectionNodelet::connectCb, this);
+        // Wait for first message to be published, determine format of incoming data
+        boost::shared_ptr<sensor_msgs::PointCloud2 const> init_cloud_in_ros;
+        sensor_msgs::PointCloud2 edge;
+        init_cloud_in_ros = ros::topic::waitForMessage<sensor_msgs::PointCloud2>("in_pcl", nh);
+        if(init_cloud_in_ros != NULL)
+        {
+            // Get the field structure of this point cloud
+            for (int f=0; f<init_cloud_in_ros->fields.size(); f++)
+            {
+                if (init_cloud_in_ros->fields[f].name == "range")
+                {
+                    flag_official_ouster_pcl = 1;
+                    H = init_cloud_in_ros->height;
+                    W = init_cloud_in_ros->width;
+                }
+                else
+                {
+                    flag_official_ouster_pcl = 0;
+                    H = 64;
+                    W = 1024;
 
-        // Make sure we don't enter connectCb() between advertising and assigning to pub_h_scans_
-        boost::lock_guard<boost::mutex> lock(connect_mutex_);
+                }
+                
+            }
+            
+            px_offset.resize(H);
+            px_offset = ouster::OS1::get_px_offset(W);
+            // for 64 channels, the px_offset =[ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
+            //                                   0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
+
+            azim_LUT.resize(W);
+            float azim_res = ((180) - (-180) ) / W;
+            linearSpacedArray(azim_LUT, -180, 180 - azim_res, W);
+
+            std::cout << "The azimuthal angles are: ";
+            for(int i=0; i < azim_LUT.size(); i++)
+            std::cout << azim_LUT.at(i) << ' ';
+            std::cout << std::endl;
+            std::cout << std::endl;
+            
+            elev_LUT.resize(H);
+            linearSpacedArray(elev_LUT, -16.611, 16.611, H - 1);
+
+            std::cout << "The elevation angles are: ";
+            for(int i=0; i < elev_LUT.size(); i++)
+            std::cout << elev_LUT.at(i) << ' ';
+            std::cout << std::endl;
+            std::cout << std::endl;
+            
+        }
 
         // https://stackoverflow.com/questions/48497670/multithreading-behaviour-with-ros-asyncspinner/48544551
         // It is possible to allow concurrent calls by setting the correct 
@@ -48,57 +90,12 @@ namespace fog
         pub_range_img_              = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
         pub_intensity_img_          = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
 
-        // Create static tf broadcaster (-30 pitch, Realsense pointed down)
 
-        try
-        {
-            low_listener.waitForTransform(low_sensor_frame, low_robot_frame, ros::Time(0), ros::Duration(10.0) );
-            low_listener.lookupTransform(low_sensor_frame, low_robot_frame, ros::Time(0), low_transform);
-            low_transform.setOrigin(tf::Vector3(0.0, 0.0, 0.0));
-	        low_m_euler.setRotation(low_transform.getRotation());
-            int low_solution_number = 1;
-            low_m_euler.getEulerYPR(low_yaw, low_pitch, low_roll, low_solution_number);
-        }
-        catch (tf::TransformException ex)
-        {
-            ROS_WARN("%s",ex.what());
-        }
-
-        std::cout << "base_link->camera roll: " << low_roll << std::endl;
-        std::cout << "base_link->camera pitch: " << low_pitch << std::endl;
-        std::cout << "base_link->camera yaw: " << low_yaw << std::endl;
-
-        H = 64;
-        W = 1024;
-        
-        azim_LUT.resize(W);
-        float azim_res = ((180) - (-180) ) / W;
-        linearSpacedArray(azim_LUT, -180, 180 - azim_res, W);
-
-        std::cout << "The azimuthal angles are: ";
-        for(int i=0; i < azim_LUT.size(); i++)
-        std::cout << azim_LUT.at(i) << ' ';
-        std::cout << std::endl;
-        std::cout << std::endl;
-        
-        elev_LUT.resize(H);
-        linearSpacedArray(elev_LUT, -16.611, 16.611, H - 1);
-
-        std::cout << "The elevation angles are: ";
-        for(int i=0; i < elev_LUT.size(); i++)
-        std::cout << elev_LUT.at(i) << ' ';
-        std::cout << std::endl;
-        std::cout << std::endl;
-                
     };
 
     void FogDetectionNodelet::configCb(Config &config, uint32_t level)
     {
         config_ = config;
-
-        // Depth Camera Parameters
-        low_robot_frame                 = config.low_robot_frame;
-        low_sensor_frame                = config.low_sensor_frame;
 
         fog_min_range_deviation_        = config.fog_min_range_deviation;
         fog_radius_high_intensity_      = config.fog_radius_high_intensity;
@@ -134,19 +131,8 @@ namespace fog
         //     ROS_WARN("%s",ex.what()); 
         //     // ros::Duration(0.1).sleep();
         // }
-        
-        bool range_pcl = 0;
 
-        // Get the field structure of this point cloud
-        for (int f=0; f<cloud_in_ros->fields.size(); f++)
-        {
-            if (cloud_in_ros->fields[f].name == "range")
-            {
-                range_pcl = 1;
-            }
-        }
-
-        if(range_pcl == 0)
+        if(flag_official_ouster_pcl == 0)
         {
 
             // START 0.010 seconds
@@ -156,8 +142,6 @@ namespace fog
 
             // END 0.010 seconds
 
-            H = 64;
-            W = 1024;
             cv::Mat range_img(H, W, CV_32FC1, 0.0);
             cv::Mat index_img(H, W, CV_32FC1, 0.0);
             cv::Mat filter_img(H, W, CV_32FC1, 0.0);
@@ -219,16 +203,14 @@ namespace fog
             output->height = 1;
             output->is_dense = true;
 
-            output->header.seq = seq;
+            output->header.seq = cloud_in2->header.seq;
             output->header.frame_id = cloud_in2->header.frame_id;
             pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
             pub_conf_pcl_.publish (output);
 
-            seq++;
-
         }
 
-        if(range_pcl == 1)
+        if(flag_official_ouster_pcl == 1)
         {
             // start 0.038118956 seconds
             
@@ -238,15 +220,7 @@ namespace fog
             sensor_msgs::Image range_image;
             sensor_msgs::Image noise_image;
             sensor_msgs::Image intensity_image;
-
-            // Get PCL metadata
-            W = cloud_in_ros->width;
-            H = cloud_in_ros->height;
-            px_offset.resize(H);
-            px_offset = ouster::OS1::get_px_offset(W);
-            // for 64 channels, the px_offset =[ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
-            //                                   0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
-
+            
             // Setup Noise Image
             noise_image.width = W;
             noise_image.height = H;
@@ -343,7 +317,6 @@ namespace fog
             // end 0.025598312 seconds            
             // start 0.004650553 seconds
 
-
             // Iterate through the depth image
             for (int u = 0; u < H; u++)
             {
@@ -359,7 +332,6 @@ namespace fog
                     }
                 }
             }
-            
 
             // end 0.004650553 seconds
             
@@ -373,15 +345,13 @@ namespace fog
             output->height = 1;
             output->is_dense = true;
 
-            output->header.seq = seq;
+            output->header.seq = cloud_in2->header.seq;
             output->header.frame_id = cloud_in2->header.frame_id;
             pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
             pub_conf_pcl_.publish (output);
 
             // end 0.000119647 seconds
             
-            
-            seq++;
             // Timing Code
             // https://stackoverflow.com/questions/2808398/easily-measure-elapsed-time
         }
@@ -531,8 +501,7 @@ namespace fog
         range_msg.header.stamp                  = ros::Time::now();
         range_msg.header.frame_id               = cloud_in_ros->header.frame_id;        
         pub_range_img_.publish(range_msg.toImageMsg());
-    } 
-
+    }
 
     // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
     void FogDetectionNodelet::getFogFilterImage(cv::Mat &range_img, cv::Mat &filter_img)
