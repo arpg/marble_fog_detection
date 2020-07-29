@@ -86,10 +86,11 @@ namespace fog
         // sub_pcl_                    = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
 
         // Publish Point Cloud
-        pub_conf_pcl_               = private_nh.advertise<sensor_msgs::PointCloud2>("out_conf_pcl", 10);
+        pub_foreground_pcl_         = private_nh.advertise<sensor_msgs::PointCloud2>("out_foreground_pcl", 10);
+        pub_foreground_z_pcl_       = private_nh.advertise<sensor_msgs::PointCloud2>("out_foreground_z_pcl", 10);
+        pub_fog_pcl_                = private_nh.advertise<sensor_msgs::PointCloud2>("out_fog_pcl", 10);
         pub_range_img_              = private_nh.advertise<sensor_msgs::Image>("out_range_img", 10);
         pub_intensity_img_          = private_nh.advertise<sensor_msgs::Image>("out_intensity_img", 10);
-
 
     };
 
@@ -154,7 +155,7 @@ namespace fog
 
             // START 0.012 seconds
 
-            getFogFilterImage(range_img, filter_img);
+            getPreFilterImage(range_img, filter_img);
 
             // END 0.012 seconds
 
@@ -162,7 +163,7 @@ namespace fog
 
             // Extract PCL Indices // https://vml.sakura.ne.jp/koeda/PCL/tutorials/html/kdtree_search.html
             pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
-            pcl::ExtractIndices<pcl::PointXYZI> extract;            
+            pcl::ExtractIndices<pcl::PointXYZI> extract;
             pcl::KdTreeFLANN<pcl::PointXYZI> kdtree;
             kdtree.setInputCloud (cloud_in2);
             pcl::PointXYZI search_pt;
@@ -184,7 +185,7 @@ namespace fog
                         ii++;
                         const size_t i = index_img.at<float>(u,v);
                         search_pt = cloud_in2->points[i];
-                        labelFogInliersFilterPCL(search_pt, cloud_in2, inliers, kdtree, i);
+                        labelForegroundFilterPCL(search_pt, cloud_in2, inliers, kdtree, i);
                         // std::cout << "accum count: " << ii << std::endl;
                         // std::cout << "inliers->indices.size(): " << inliers->indices.size() << std::endl;
                     }
@@ -193,20 +194,7 @@ namespace fog
             
             // END 0.003 seconds
             
-            extract.setInputCloud(cloud_in2);
-            extract.setIndices(inliers);
-            extract.setNegative(false);
-            pcl::PointCloud<pcl::PointXYZI>::Ptr output(new pcl::PointCloud<pcl::PointXYZI>);
-            extract.filter(*output);
-            
-            output->width = output->points.size();
-            output->height = 1;
-            output->is_dense = true;
-
-            output->header.seq = cloud_in2->header.seq;
-            output->header.frame_id = cloud_in2->header.frame_id;
-            pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
-            pub_conf_pcl_.publish (output);
+            getPostFilterPcl(cloud_in2, inliers);
 
         }
 
@@ -292,8 +280,7 @@ namespace fog
             // Skip if first frame
             if(last_range_img.size().height > 0)
             {
-                
-                getFogFilterImage(range_img, filter_img);
+                getPreFilterImage(range_img, filter_img);
             }
             
             last_range_img = range_img;
@@ -328,28 +315,15 @@ namespace fog
                         const size_t vv = (v + px_offset[u]) % W;
                         const size_t i = vv * H + u;
                         search_pt = cloud_in2->points[i];
-                        labelFogInliersFilterPCL(search_pt, cloud_in2, inliers, kdtree, i);
+                        labelForegroundFilterPCL(search_pt, cloud_in2, inliers, kdtree, i);
                     }
                 }
             }
 
             // end 0.004650553 seconds
             
-            extract.setInputCloud(cloud_in2);
-            extract.setIndices(inliers);
-            extract.setNegative(false);
-            pcl::PointCloud<pcl::PointXYZI>::Ptr output(new pcl::PointCloud<pcl::PointXYZI>);
-            extract.filter(*output);
+            getPostFilterPcl(cloud_in2, inliers);
             
-            output->width = output->points.size ();
-            output->height = 1;
-            output->is_dense = true;
-
-            output->header.seq = cloud_in2->header.seq;
-            output->header.frame_id = cloud_in2->header.frame_id;
-            pcl_conversions::toPCL(ros::Time::now(), output->header.stamp);
-            pub_conf_pcl_.publish (output);
-
             // end 0.000119647 seconds
             
             // Timing Code
@@ -504,7 +478,7 @@ namespace fog
     }
 
     // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
-    void FogDetectionNodelet::getFogFilterImage(cv::Mat &range_img, cv::Mat &filter_img)
+    void FogDetectionNodelet::getPreFilterImage(cv::Mat &range_img, cv::Mat &filter_img)
     {
         cv::Mat return_img(H, W, CV_32FC1, 0.0);
         cv::Mat avg_range_img(H, W, CV_32FC1, 0.0);
@@ -612,9 +586,8 @@ namespace fog
         cv::threshold(filtered_img, filter_img, fog_min_range_deviation_, 1.0, THRESH_TOZERO);
     }
 
-
     // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
-    void FogDetectionNodelet::labelFogInliersFilterPCL(pcl::PointXYZI search_pt,
+    void FogDetectionNodelet::labelForegroundFilterPCL(pcl::PointXYZI search_pt,
                                               pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2,
                                               pcl::PointIndices::Ptr inliers, 
                                               pcl::KdTreeFLANN<pcl::PointXYZI> kdtree,
@@ -651,6 +624,71 @@ namespace fog
             }
         }
     }
+
+    // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
+    void FogDetectionNodelet::getPostFilterPcl(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2,
+                                               pcl::PointIndices::Ptr inliers)
+    {
+
+        pcl::PointCloud<pcl::PointXYZI>::Ptr filt_fore(new pcl::PointCloud<pcl::PointXYZI>);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr filt_fore_z(new pcl::PointCloud<pcl::PointXYZI>);
+        pcl::PointCloud<pcl::PointXYZI>::Ptr fog(new pcl::PointCloud<pcl::PointXYZI>);
+
+        if(inliers->indices.size() == 0)
+        {
+            // do nothing
+        }
+        else
+        {
+
+            pcl::ExtractIndices<pcl::PointXYZI> extract;
+            extract.setInputCloud(cloud_in2);
+            extract.setIndices(inliers);
+            extract.setNegative(false);
+            extract.filter(*filt_fore);
+            
+            pcl::PassThrough<pcl::PointXYZI> pass;
+            pass.setInputCloud (filt_fore);
+            pass.setFilterFieldName ("z");
+            pass.setFilterLimits(-0.5, 2);
+            pass.filter (*filt_fore_z);
+
+            pcl::RadiusOutlierRemoval<pcl::PointXYZI> outrem;
+            outrem.setInputCloud(filt_fore_z);
+            outrem.setRadiusSearch(2.5);
+            outrem.setMinNeighborsInRadius(4);
+            outrem.setKeepOrganized(true);
+            outrem.filter (*fog);
+
+        }
+
+            filt_fore->width = filt_fore->points.size();
+            filt_fore->height = 1;
+            filt_fore->is_dense = true;
+            filt_fore->header.seq = cloud_in2->header.seq;
+            filt_fore->header.frame_id = cloud_in2->header.frame_id;
+            pcl_conversions::toPCL(ros::Time::now(), filt_fore->header.stamp);
+            pub_foreground_pcl_.publish (filt_fore);
+
+            filt_fore_z->width = filt_fore_z->points.size();
+            filt_fore_z->height = 1;
+            filt_fore_z->is_dense = true;
+            filt_fore_z->header.seq = cloud_in2->header.seq;
+            filt_fore_z->header.frame_id = cloud_in2->header.frame_id;
+            pcl_conversions::toPCL(ros::Time::now(), filt_fore_z->header.stamp);
+            pub_foreground_z_pcl_.publish (filt_fore_z);
+
+            fog->width = fog->points.size();
+            fog->height = 1;
+            fog->is_dense = true;
+            fog->header.seq = cloud_in2->header.seq;
+            fog->header.frame_id = cloud_in2->header.frame_id;
+            pcl_conversions::toPCL(ros::Time::now(), fog->header.stamp);
+            pub_fog_pcl_.publish (fog);
+
+
+    }
+
 }
 
 // Register nodelet

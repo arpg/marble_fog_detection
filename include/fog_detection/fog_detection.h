@@ -58,6 +58,8 @@
 #include <pcl/filters/radius_outlier_removal.h>
 #include <pcl/search/pcl_search.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/filters/passthrough.h>
+#include <pcl/filters/radius_outlier_removal.h>
 
 #include "sensor_msgs/Imu.h"
 
@@ -85,7 +87,11 @@ namespace fog
     
       // ROS communication
       ros::Subscriber sub_pcl_;
-      ros::Publisher pub_conf_pcl_;
+      ros::Publisher pub_foreground_pcl_;
+      ros::Publisher pub_foreground_z_pcl_;
+      ros::Publisher pub_foreground_z_ror_pcl_;
+      ros::Publisher pub_fog_pcl_;
+
       ros::Publisher pub_range_img_;
       ros::Publisher pub_intensity_img_;
 
@@ -122,13 +128,16 @@ namespace fog
       void getDepthImageOfficial(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros,
                                 cv::Mat &range_img);
 
-      void getFogFilterImage(cv::Mat &range_img, cv::Mat &filter_img);
+      void getPreFilterImage(cv::Mat &range_img, cv::Mat &filter_img);
 
-      void labelFogInliersFilterPCL(pcl::PointXYZI search_pt,
+      void labelForegroundFilterPCL(pcl::PointXYZI search_pt,
                                     pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2,
                                     pcl::PointIndices::Ptr inliers, 
                                     pcl::KdTreeFLANN<pcl::PointXYZI> kdtree,
                                     int i);
+
+      void getPostFilterPcl(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2,
+                            pcl::PointIndices::Ptr inliers);
 
     private:
  
