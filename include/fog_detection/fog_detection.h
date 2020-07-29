@@ -145,6 +145,10 @@ namespace fog
       float fog_radius_high_intensity_;
       float fog_low_intensity_;
       float fog_high_intensity_;
+      float fog_min_z_;
+      float fog_max_z_;
+      float fog_ror_radius_;
+      float fog_ror_min_neighbors_;
 
       cv::Mat last_range_img;
 

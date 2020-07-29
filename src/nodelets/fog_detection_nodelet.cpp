@@ -102,8 +102,12 @@ namespace fog
         fog_radius_high_intensity_      = config.fog_radius_high_intensity;
         fog_low_intensity_              = config.fog_low_intensity;
         fog_high_intensity_             = config.fog_high_intensity;
-        
-    };
+        fog_min_z_                      = config.fog_min_z;
+        fog_max_z_                      = config.fog_max_z;
+        fog_ror_radius_                 = config.fog_ror_radius;
+        fog_ror_min_neighbors_          = config.fog_ror_min_neighbors;
+
+    }
 
     void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
     {
@@ -650,41 +654,41 @@ namespace fog
             pcl::PassThrough<pcl::PointXYZI> pass;
             pass.setInputCloud (filt_fore);
             pass.setFilterFieldName ("z");
-            pass.setFilterLimits(-0.5, 2);
+            pass.setFilterLimits(fog_min_z_, fog_max_z_);
             pass.filter (*filt_fore_z);
 
             pcl::RadiusOutlierRemoval<pcl::PointXYZI> outrem;
             outrem.setInputCloud(filt_fore_z);
-            outrem.setRadiusSearch(2.5);
-            outrem.setMinNeighborsInRadius(4);
+            outrem.setRadiusSearch(fog_ror_radius_);
+            outrem.setMinNeighborsInRadius(fog_ror_min_neighbors_);
             outrem.setKeepOrganized(true);
             outrem.filter (*fog);
 
         }
 
-            filt_fore->width = filt_fore->points.size();
-            filt_fore->height = 1;
-            filt_fore->is_dense = true;
-            filt_fore->header.seq = cloud_in2->header.seq;
-            filt_fore->header.frame_id = cloud_in2->header.frame_id;
-            pcl_conversions::toPCL(ros::Time::now(), filt_fore->header.stamp);
-            pub_foreground_pcl_.publish (filt_fore);
+        filt_fore->width = filt_fore->points.size();
+        filt_fore->height = 1;
+        filt_fore->is_dense = true;
+        filt_fore->header.seq = cloud_in2->header.seq;
+        filt_fore->header.frame_id = cloud_in2->header.frame_id;
+        pcl_conversions::toPCL(ros::Time::now(), filt_fore->header.stamp);
+        pub_foreground_pcl_.publish (filt_fore);
 
-            filt_fore_z->width = filt_fore_z->points.size();
-            filt_fore_z->height = 1;
-            filt_fore_z->is_dense = true;
-            filt_fore_z->header.seq = cloud_in2->header.seq;
-            filt_fore_z->header.frame_id = cloud_in2->header.frame_id;
-            pcl_conversions::toPCL(ros::Time::now(), filt_fore_z->header.stamp);
-            pub_foreground_z_pcl_.publish (filt_fore_z);
+        filt_fore_z->width = filt_fore_z->points.size();
+        filt_fore_z->height = 1;
+        filt_fore_z->is_dense = true;
+        filt_fore_z->header.seq = cloud_in2->header.seq;
+        filt_fore_z->header.frame_id = cloud_in2->header.frame_id;
+        pcl_conversions::toPCL(ros::Time::now(), filt_fore_z->header.stamp);
+        pub_foreground_z_pcl_.publish (filt_fore_z);
 
-            fog->width = fog->points.size();
-            fog->height = 1;
-            fog->is_dense = true;
-            fog->header.seq = cloud_in2->header.seq;
-            fog->header.frame_id = cloud_in2->header.frame_id;
-            pcl_conversions::toPCL(ros::Time::now(), fog->header.stamp);
-            pub_fog_pcl_.publish (fog);
+        fog->width = fog->points.size();
+        fog->height = 1;
+        fog->is_dense = true;
+        fog->header.seq = cloud_in2->header.seq;
+        fog->header.frame_id = cloud_in2->header.frame_id;
+        pcl_conversions::toPCL(ros::Time::now(), fog->header.stamp);
+        pub_fog_pcl_.publish (fog);
 
 
     }

@@ -5,7 +5,7 @@
         <node pkg="nodelet" type="nodelet" name="fog_detection" args="load fog/fog_detection_nodelet standalone_nodelet" output="screen">
             <remap from="in_pcl"                to="/H02/ouster_driver/points" />
             <rosparam>
-                fog_min_range_deviation: 0.5
+                fog_min_range_deviation: 0.4
                 fog_radius_high_intensity: 0.4
 
                 <!-- TUNNEL -->
@@ -13,8 +13,15 @@
                 fog_high_intensity: 0.11
                 
                 <!-- URBAN -->
-                <!-- fog_low_intensity : 10
-                fog_high_intensity: 100 -->
+                <!-- fog_low_intensity :     10
+                fog_high_intensity:     100 -->
+
+                <!-- GENERIC -->
+                fog_min_z:              -0.5   
+                fog_max_z:              2.0
+                fog_ror_radius:         1.5
+                fog_ror_min_neighbors:  10
+                
             </rosparam>
         </node>
 
