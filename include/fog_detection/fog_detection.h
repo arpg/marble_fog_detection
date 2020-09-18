@@ -73,6 +73,9 @@
 #include <ouster_ros/OS1ConfigSrv.h>
 #include <ouster_ros/os1_ros.h>
 
+#include <mutex>
+#include <thread>
+
 #include <chrono> 
 using namespace std::chrono; 
 using namespace cv;
@@ -84,7 +87,7 @@ namespace fog
   class FogDetectionNodelet : public nodelet::Nodelet
   {
     public:
-    
+
       // ROS communication
       ros::Subscriber sub_pcl_;
       ros::Publisher pub_foreground_pcl_;
@@ -108,7 +111,7 @@ namespace fog
       boost::shared_ptr<ReconfigureServer> reconfigure_server_;
       Config config_;
 
-      void onInit();
+      virtual void onInit();
 
       // Handles (un)subscribing when clients (un)subscribe;
       void connectCb();
@@ -166,6 +169,8 @@ namespace fog
 
       // Pixel offset (only for official Ouster ROS driver)
       std::vector<int> px_offset;
+
+      // std::mutex mtx;
 
   };
 

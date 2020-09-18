@@ -9,8 +9,8 @@ namespace fog
 
     void FogDetectionNodelet::onInit()
     {
-        nh         = getMTNodeHandle();
-        private_nh = getMTPrivateNodeHandle();
+        nh         = getNodeHandle();
+        private_nh = getPrivateNodeHandle();
 
         // Read parameters
         private_nh.param("queue_size", queue_size_, 5);
@@ -83,7 +83,7 @@ namespace fog
         ops.allow_concurrent_callbacks  = true;
         sub_pcl_                        = nh.subscribe(ops);
 
-        // sub_pcl_                    = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 500, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
+        // sub_pcl_                    = nh.subscribe<sensor_msgs::PointCloud2>("in_pcl", 1, boost::bind(&FogDetectionNodelet::point_cloud_cb, this, _1));
 
         // Publish Point Cloud
         pub_foreground_pcl_         = private_nh.advertise<sensor_msgs::PointCloud2>("out_foreground_pcl", 10);
@@ -111,8 +111,10 @@ namespace fog
 
     void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
     {
+        
+        // std::lock_guard<std::mutex> lck {mtx};
 
-        std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        // std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
         // // Note roll and pitch are intentionally backwards due to the image frame to boldy frame transform_pcl. The IMU transform_pcl converts from body to world frame.
         // tf::Transform transform_pcl;
@@ -199,6 +201,9 @@ namespace fog
             // END 0.003 seconds
             
             getPostFilterPcl(cloud_in2, inliers);
+
+            cloud_in2.reset(new pcl::PointCloud<pcl::PointXYZI>);
+            inliers.reset(new pcl::PointIndices());
 
         }
 
@@ -332,6 +337,10 @@ namespace fog
             
             // Timing Code
             // https://stackoverflow.com/questions/2808398/easily-measure-elapsed-time
+
+            cloud_in2.reset(new pcl::PointCloud<pcl::PointXYZI>);
+            inliers.reset(new pcl::PointIndices());
+
         }
 
         // std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
@@ -638,32 +647,32 @@ namespace fog
         pcl::PointCloud<pcl::PointXYZI>::Ptr filt_fore_z(new pcl::PointCloud<pcl::PointXYZI>);
         pcl::PointCloud<pcl::PointXYZI>::Ptr fog(new pcl::PointCloud<pcl::PointXYZI>);
 
-        if(inliers->indices.size() == 0)
+        if(inliers->indices.size() > 0)
         {
-            // do nothing
-        }
-        else
-        {
-
             pcl::ExtractIndices<pcl::PointXYZI> extract;
             extract.setInputCloud(cloud_in2);
             extract.setIndices(inliers);
             extract.setNegative(false);
             extract.filter(*filt_fore);
             
-            pcl::PassThrough<pcl::PointXYZI> pass;
-            pass.setInputCloud (filt_fore);
-            pass.setFilterFieldName ("z");
-            pass.setFilterLimits(fog_min_z_, fog_max_z_);
-            pass.filter (*filt_fore_z);
+            if(filt_fore->points.size() > 0)
+            {
+                pcl::PassThrough<pcl::PointXYZI> pass;
+                pass.setInputCloud (filt_fore);
+                pass.setFilterFieldName ("z");
+                pass.setFilterLimits(fog_min_z_, fog_max_z_);
+                pass.filter (*filt_fore_z);
 
-            pcl::RadiusOutlierRemoval<pcl::PointXYZI> outrem;
-            outrem.setInputCloud(filt_fore_z);
-            outrem.setRadiusSearch(fog_ror_radius_);
-            outrem.setMinNeighborsInRadius(fog_ror_min_neighbors_);
-            outrem.setKeepOrganized(true);
-            outrem.filter (*fog);
-
+                if(filt_fore_z->points.size() > 0)
+                {
+                    pcl::RadiusOutlierRemoval<pcl::PointXYZI> outrem;
+                    outrem.setInputCloud(filt_fore_z);
+                    outrem.setRadiusSearch(fog_ror_radius_);
+                    outrem.setMinNeighborsInRadius(fog_ror_min_neighbors_);
+                    outrem.setKeepOrganized(true);
+                    outrem.filter (*fog);
+                }
+            }
         }
 
         filt_fore->width = filt_fore->points.size();
@@ -690,6 +699,9 @@ namespace fog
         pcl_conversions::toPCL(ros::Time::now(), fog->header.stamp);
         pub_fog_pcl_.publish (fog);
 
+        filt_fore.reset(new pcl::PointCloud<pcl::PointXYZI>);
+        filt_fore_z.reset(new pcl::PointCloud<pcl::PointXYZI>);
+        fog.reset(new pcl::PointCloud<pcl::PointXYZI>);
 
     }
 

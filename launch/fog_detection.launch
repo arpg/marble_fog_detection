@@ -2,8 +2,8 @@
 
         <node pkg="nodelet" type="nodelet" name="standalone_nodelet" args="manager" output="screen" />
         
-        <node pkg="nodelet" type="nodelet" name="fog_detection" args="load fog/fog_detection_nodelet standalone_nodelet" output="screen">
-            <remap from="in_pcl"                to="/A01/os1_cloud_node/points" />
+        <node pkg="nodelet" type="nodelet" name="fog_detection" args="load fog/fog_detection_nodelet standalone_nodelet" output="screen" launch-prefix="valgrind --log-file=/home/erush91/data/valgrind/valgrind.log --leak-check=full --show-leak-kinds=all" >
+            <remap from="in_pcl"                to="/H01/os1_cloud_node/points" />
             <rosparam>
                 fog_min_range_deviation: 0.4
                 fog_radius_high_intensity: 0.4
@@ -11,7 +11,7 @@
                 <!-- TUNNEL -->
                 <!-- fog_low_intensity : 0.04
                 fog_high_intensity: 0.11 -->
-                
+
                 <!-- URBAN -->
                 fog_low_intensity :     10
                 fog_high_intensity:     100
@@ -21,7 +21,7 @@
                 fog_max_z:              2.0
                 fog_ror_radius:         1.5
                 fog_ror_min_neighbors:  10
-                
+
             </rosparam>
         </node>
 
