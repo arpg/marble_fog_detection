@@ -43,12 +43,12 @@ namespace fog
                     W = 1024;
 
                 }
-                
+
             }
-            
+
             px_offset.resize(H);
             px_offset = ouster::OS1::get_px_offset(W);
-            // for 64 channels, the px_offset =[ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
+            // for 64 channels, the px_offset =[ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18,
             //                                   0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
 
             azim_LUT.resize(W);
@@ -60,7 +60,7 @@ namespace fog
             std::cout << azim_LUT.at(i) << ' ';
             std::cout << std::endl;
             std::cout << std::endl;
-            
+
             elev_LUT.resize(H);
             linearSpacedArray(elev_LUT, -16.611, 16.611, H - 1);
 
@@ -69,11 +69,11 @@ namespace fog
             std::cout << elev_LUT.at(i) << ' ';
             std::cout << std::endl;
             std::cout << std::endl;
-            
+
         }
 
         // https://stackoverflow.com/questions/48497670/multithreading-behaviour-with-ros-asyncspinner/48544551
-        // It is possible to allow concurrent calls by setting the correct 
+        // It is possible to allow concurrent calls by setting the correct
         // SubscribeOptions.allow_concurrent_callbacks which is false by default
         // Therefore you need to define your own SubscribeOptions.
         // Here is the code you need to subscribe and allow concurrent callback calls:
@@ -111,7 +111,7 @@ namespace fog
 
     void FogDetectionNodelet::point_cloud_cb(const sensor_msgs::PointCloud2::ConstPtr& cloud_in_ros)
     {
-        
+
         // std::lock_guard<std::mutex> lck {mtx};
 
         // std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
@@ -124,7 +124,7 @@ namespace fog
         // tf::TransformListener listener;
         // tf::StampedTransform T_map_os1lidar;
         // double roll, pitch, yaw;
-        
+
         // try
         // {
         //     listener.waitForTransform("/os1_lidar", "/map", ros::Time::now(), ros::Duration(0.05) );
@@ -135,7 +135,7 @@ namespace fog
         // }
         // catch (tf::TransformException ex)
         // {
-        //     ROS_WARN("%s",ex.what()); 
+        //     ROS_WARN("%s",ex.what());
         //     // ros::Duration(0.1).sleep();
         // }
 
@@ -143,7 +143,7 @@ namespace fog
         {
 
             // START 0.010 seconds
-            
+
             pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
 
@@ -197,9 +197,9 @@ namespace fog
                     }
                 }
             }
-            
+
             // END 0.003 seconds
-            
+
             getPostFilterPcl(cloud_in2, inliers);
 
             cloud_in2.reset(new pcl::PointCloud<pcl::PointXYZI>);
@@ -210,14 +210,14 @@ namespace fog
         if(flag_official_ouster_pcl == 1)
         {
             // start 0.038118956 seconds
-            
+
             pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2 (new pcl::PointCloud<pcl::PointXYZI>);
             pcl::fromROSMsg(*cloud_in_ros, *cloud_in2);
-            
+
             sensor_msgs::Image range_image;
             sensor_msgs::Image noise_image;
             sensor_msgs::Image intensity_image;
-            
+
             // Setup Noise Image
             noise_image.width = W;
             noise_image.height = H;
@@ -263,10 +263,10 @@ namespace fog
             // }
             // for (int i = 0; i < H; i++)
             // {
-            //     elev_val[i] = atan2(z_img.at<float>(i,40), sqrt(x_img.at<float>(i,40) * x_img.at<float>(i,40) 
+            //     elev_val[i] = atan2(z_img.at<float>(i,40), sqrt(x_img.at<float>(i,40) * x_img.at<float>(i,40)
             //                                                   + y_img.at<float>(i,40) * y_img.at<float>(i,40))) * 180 / M_PI;
-            // } 
-            
+            // }
+
             // std::cout << "The azimuthal angles are : " << std::endl;
             // for(int i=0; i < azim_val.size(); i++)
             // {
@@ -291,7 +291,7 @@ namespace fog
             {
                 getPreFilterImage(range_img, filter_img);
             }
-            
+
             last_range_img = range_img;
 
 
@@ -299,7 +299,7 @@ namespace fog
             // start 0.025598312 seconds
 
             // Extract PCL Indices
-            
+
             // // Try to publish half of the point cloud
             pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
             pcl::ExtractIndices<pcl::PointXYZI> extract;
@@ -310,7 +310,7 @@ namespace fog
             pcl::PointXYZI search_pt;
             bool flag_fog;
 
-            // end 0.025598312 seconds            
+            // end 0.025598312 seconds
             // start 0.004650553 seconds
 
             // Iterate through the depth image
@@ -330,11 +330,11 @@ namespace fog
             }
 
             // end 0.004650553 seconds
-            
+
             getPostFilterPcl(cloud_in2, inliers);
-            
+
             // end 0.000119647 seconds
-            
+
             // Timing Code
             // https://stackoverflow.com/questions/2808398/easily-measure-elapsed-time
 
@@ -345,10 +345,10 @@ namespace fog
 
         // std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
         // std::cout << "Time difference = " << std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() << " [ns]" << std::endl << std::endl;
-            
+
     };
 
-    double FogDetectionNodelet::binarySearch(std::vector<double>& array, const double value, const double threshold) 
+    double FogDetectionNodelet::binarySearch(std::vector<double>& array, const double value, const double threshold)
     {
         // I assume here that the array is sorted ...
         // If I cannot find it, I will return infinity (:
@@ -357,11 +357,11 @@ namespace fog
 
         std::vector<double>::iterator it = std::lower_bound(array.begin(), array.end(), value - threshold);
 
-        if(it != array.end()) 
+        if(it != array.end())
         {
             if(fabs(*it - value) <= threshold ) returnValue = *it;
         }
-        
+
         auto returnIndex = std::distance(array.begin(), it); // if you want to return the LUT index
 
         return returnIndex;
@@ -377,16 +377,16 @@ namespace fog
         {
             *x = val;
         }
-    } 
+    }
 
     // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
     void FogDetectionNodelet::getDepthImageCPFL(pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2, cv::Mat &range_img, cv::Mat &index_img)
     {
-        
+
         // X: NORTH
         // Y: EAST
         // Z: UP
-        
+
         // NOTE: XYZ --> NWU (ouster_link frame), indices start at NORTH and rotate CLOCKWISE
         // NOTE: Azim angles start at NORTH and rotate CLOCKWISE (in ouster_link frame)
         // NOTE: Azim angles are -180 (NORTH), ... -90 (EAST), ... 0 (SOUTH), 90 (WEST), ... 180 (NORTH)
@@ -417,8 +417,8 @@ namespace fog
 
                 u = (64-1) - binarySearch(elev_LUT, elev_angle[i], 0.528/2.0);
                 // DEBUG: Print the LUT input and output to ensure functioning properly
-                // std::cout << elev_angle[i] << " -> " << u << std::endl; 
-                
+                // std::cout << elev_angle[i] << " -> " << u << std::endl;
+
                 v = binarySearch(azim_LUT, azim_angle[i], 0.36/2.0);
                 // DEBUG: Print the LUT input and output to ensure functioning properly
                 // std::cout << azim_angle[i] << " -> " << v << std::endl;
@@ -441,9 +441,9 @@ namespace fog
         range_msg.encoding                  = sensor_msgs::image_encodings::TYPE_32FC1;
         range_msg.image                     = range_img;
         range_msg.header.stamp              = ros::Time::now();
-        range_msg.header.frame_id           = cloud_in2->header.frame_id;        
+        range_msg.header.frame_id           = cloud_in2->header.frame_id;
         pub_range_img_.publish(range_msg.toImageMsg());
-        
+
         return;
     }
 
@@ -454,9 +454,9 @@ namespace fog
         // start 0.038118956 seconds
         ouster_ros::OS1::CloudOS1 cloud_in{};
         pcl::fromROSMsg(*cloud_in_ros, cloud_in);
-        
+
         // Get PCL metadata
-        // for 64 channels, the px_offset =[ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 
+        // for 64 channels, the px_offset =[ 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18,
         //                                   0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18, 0, 6, 12, 18]
 
         // NOTE: XYZ --> NWU (os1_lidar frame), indices start at NORTH and rotate CLOCKWISE
@@ -486,7 +486,7 @@ namespace fog
         range_msg.encoding                      = sensor_msgs::image_encodings::TYPE_32FC1;
         range_msg.image                         = range_img;
         range_msg.header.stamp                  = ros::Time::now();
-        range_msg.header.frame_id               = cloud_in_ros->header.frame_id;        
+        range_msg.header.frame_id               = cloud_in_ros->header.frame_id;
         pub_range_img_.publish(range_msg.toImageMsg());
     }
 
@@ -518,12 +518,12 @@ namespace fog
 
         // Subtract range image from average range image, binarize as pre-filter
         cv::threshold(avg_range_img - range_img, dev_range_bin_img, 0.10, 1.0, THRESH_BINARY);
-        
+
 
         // DEBUNG: Print min and max, https://stackoverflow.com/questions/18233691/how-to-index-and-modify-an-opencv-matrix
         // double min = 0, max = 0;
         // cv::Point minLoc(-1, -1), maxLoc(-1, -1);
-        
+
         // Image Filter
 
         // compute sum of positive matrix elements
@@ -539,7 +539,7 @@ namespace fog
                                          1/sqrt(2), 1/sqrt(2),         0, 1/sqrt(2), 1/sqrt(2),
                                          1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2),
                                          1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2), 1/sqrt(2)};
-        
+
         std::vector<float> bool_vec;
 
         // end 0.002747821 seconds
@@ -550,7 +550,7 @@ namespace fog
         {
             for(int j = 0; j < range_img.cols; j++)
             {
-                // Ignore border pixels, ignore pixels with current or previous value of 0 (no return) 
+                // Ignore border pixels, ignore pixels with current or previous value of 0 (no return)
                 if( (i < n_above) || (i > range_img.rows - n_below) || (j < n_left) || (j > range_img.cols - n_right || range_img.at<float>(i,j) == 0) || dev_range_bin_img.at<float>(i,j) == 0 )
                 {
                     filtered_img.at<float>(i,j) = 0;
@@ -602,7 +602,7 @@ namespace fog
     // https://gist.github.com/mortenpi/f20a93c8ed3ee7785e65
     void FogDetectionNodelet::labelForegroundFilterPCL(pcl::PointXYZI search_pt,
                                               pcl::PointCloud<pcl::PointXYZI>::Ptr cloud_in2,
-                                              pcl::PointIndices::Ptr inliers, 
+                                              pcl::PointIndices::Ptr inliers,
                                               pcl::KdTreeFLANN<pcl::PointXYZI> kdtree,
                                               int i)
     {
@@ -615,7 +615,7 @@ namespace fog
             // Neighbors within radius search
             std::vector<int> pointIdxRadiusSearch;
             std::vector<float> pointRadiusSquaredDistance;
-            
+
             // If it has neighbors
             if(kdtree.radiusSearch(search_pt, fog_radius_high_intensity_, pointIdxRadiusSearch, pointRadiusSquaredDistance) > 0)
             {
@@ -654,7 +654,7 @@ namespace fog
             extract.setIndices(inliers);
             extract.setNegative(false);
             extract.filter(*filt_fore);
-            
+
             if(filt_fore->points.size() > 0)
             {
                 pcl::PassThrough<pcl::PointXYZI> pass;
@@ -669,8 +669,12 @@ namespace fog
                     outrem.setInputCloud(filt_fore_z);
                     outrem.setRadiusSearch(fog_ror_radius_);
                     outrem.setMinNeighborsInRadius(fog_ror_min_neighbors_);
-                    outrem.setKeepOrganized(true);
+                    // outrem.setKeepOrganized(true);
                     outrem.filter (*fog);
+                    if(fog->points.size() > 0)
+                    {
+                      std::cout << fog->points[0].x << ", " <<  fog->points[0].y <<  ", " << fog->points[0].z << std::endl;
+                    }
                 }
             }
         }

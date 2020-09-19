@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 2.8)
 project(fog_detection)
 
-find_package(catkin REQUIRED)
-
 find_package(catkin REQUIRED 
         cv_bridge
         dynamic_reconfigure
@@ -15,25 +13,15 @@ find_package(catkin REQUIRED
         message_generation
         pcl_ros
         pcl_conversions
-        ouster_ros)
+	ouster_ros)
 find_package(OpenCV REQUIRED)
 find_package(Boost REQUIRED COMPONENTS thread)
 
 if(cv_bridge_VERSION VERSION_GREATER "1.12.0")
-  add_compile_options(-std=c++11)
+   add_compile_options(-std=c++11)
 endif()
 
-add_message_files(
-	DIRECTORY
-	msg
-	FILES
-)
-
-generate_messages(DEPENDENCIES
-        std_msgs
-        geometry_msgs
-        sensor_msgs
-)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Dynamic reconfigure support
 generate_dynamic_reconfigure_options(
@@ -66,6 +54,7 @@ src/nodelets/fog_detection_nodelet.cpp
 )
 add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_gencfg ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
+set_property(TARGET ${PROJECT_NAME} PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 install(TARGETS ${PROJECT_NAME}
         DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

@@ -44,7 +44,6 @@
 #include <visualization_msgs/Marker.h>
 
 #include <pluginlib/class_list_macros.h>
-#include "pcl_ros/features/obstacles.h"
 #include <pcl/point_types.h>
 #include <pcl/impl/point_types.hpp>
 #include <pcl/io/pcd_io.h>
